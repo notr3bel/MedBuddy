@@ -38,13 +38,18 @@ print(f"Using Device: {device}")
 print("Model Loaded Successfully")
 
 
+import io
+
 # --------------------------------------------------
 # INFERENCE
 # --------------------------------------------------
 
-def predict_medicine_name(image_path: str) -> str:
+def predict_medicine_name(image_path_or_bytes) -> str:
     try:
-        image = Image.open(image_path).convert("RGB")
+        if isinstance(image_path_or_bytes, bytes):
+            image = Image.open(io.BytesIO(image_path_or_bytes)).convert("RGB")
+        else:
+            image = Image.open(image_path_or_bytes).convert("RGB")
 
         pixel_values = processor(
             image,
@@ -69,3 +74,4 @@ def predict_medicine_name(image_path: str) -> str:
     except Exception as e:
         print(f"TrOCR Error: {e}")
         return "OCR_ERROR"
+

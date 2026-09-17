@@ -1,0 +1,63 @@
+import io
+import logging
+import cv2
+import numpy as np
+from PIL import Image, ImageOps
+
+logger = logging.getLogger("medintel.quality")
+
+def analyze_image_quality(file_bytes: bytes) -> dict:
+    """
+    Phase 2: Image Quality Analysis before OCR/AI Processing.
+    Only rejects blank, corrupted, or extremely low-resolution images.
+    Legitimate paper prescriptions and medical documents will always pass.
+    """
+    if not file_bytes or len(file_bytes) < 100:
+        return {
+            "pass_quality": False,
+            "message": "File is empty or corrupted.",
+            "metrics": {}
+        }
+
+    try:
+        pil_img = Image.open(io.BytesIO(file_bytes))
+        width, height = pil_img.size
+
+        # Reject extremely tiny thumbnail images (< 100x100 pixels)
+        if width < 100 or height < 100:
+            return {
+                "pass_quality": False,
+                "warning": "QUALITY_WARNING",
+                "message": "Image quality is too poor. Resolution is too low.",
+                "metrics": {"resolution": (width, height)}
+            }
+
+        # Check for completely blank/flat uniform images (e.g. solid grey/black/white block)
+        img_rgb = pil_img.convert("RGB")
+        img_np = np.array(img_rgb)
+        gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+        contrast = float(np.std(gray))
+
+        if contrast < 1.0:
+            return {
+                "pass_quality": False,
+                "warning": "QUALITY_WARNING",
+                "message": "Image quality is too poor to analyze. Please upload a clearer image.",
+                "metrics": {"resolution": (width, height), "contrast": contrast}
+            }
+
+        return {
+            "pass_quality": True,
+            "warning": None,
+            "message": "Image quality acceptable",
+            "metrics": {"resolution": (width, height), "contrast": round(contrast, 2)}
+        }
+
+    except Exception as e:
+        logger.warning(f"Image quality check warning: {e}")
+        # Default to passing image to OCR/Gemini to prevent false rejections
+        return {
+            "pass_quality": True,
+            "message": "Image quality acceptable",
+            "metrics": {}
+        }

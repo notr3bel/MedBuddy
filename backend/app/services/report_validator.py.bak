@@ -1,0 +1,57 @@
+import re
+
+SUPPORTED_REPORT_TYPES = {
+    "CBC": ["cbc", "hemogram", "complete blood count", "hemoglobin", "wbc", "rbc", "platelet"],
+    "LFT": ["lft", "liver function", "bilirubin", "sgot", "sgpt", "alt", "ast", "alkaline phosphatase"],
+    "KFT": ["kft", "kidney function", "renal function", "creatinine", "urea", "uric acid", "bun"],
+    "Lipid": ["lipid", "cholesterol", "triglycerides", "hdl", "ldl", "vldl"],
+    "HbA1c": ["hba1c", "glycated hemoglobin", "glycohemoglobin", "blood sugar", "glucose"],
+    "Thyroid": ["thyroid", "t3", "t4", "tsh", "triiodothyronine", "thyroxine"],
+    "Urine": ["urine", "urinalysis", "pus cells", "specific gravity", "proteinuria"],
+    "MRI": ["mri", "magnetic resonance"],
+    "CT": ["ct scan", "computed tomography"],
+    "X-ray": ["x-ray", "xray", "radiograph", "radiology"],
+    "ECG": ["ecg", "ekg", "electrocardiogram"],
+    "Echo": ["echocardiogram", "echo", "2d echo"]
+}
+
+def identify_report_type(ocr_text: str) -> str:
+    """
+    Phase 10: Identifies medical report category from OCR text.
+    """
+    lowered = ocr_text.lower()
+
+    for report_type, keywords in SUPPORTED_REPORT_TYPES.items():
+        if any(kw in lowered for kw in keywords):
+            return report_type
+
+    return "Unknown Report"
+
+def validate_report_content(ocr_text: str) -> dict:
+    """
+    Validates if OCR text contains medical lab/radiology findings.
+    """
+    report_type = identify_report_type(ocr_text)
+    
+    # Check for presence of typical report indicators
+    medical_report_terms = [
+        "patient name", "lab test", "test result", "reference range",
+        "specimen", "units", "impression", "clinical findings", "pathology report",
+        "observed value", "normal range", "hospital lab"
+    ]
+    
+    lowered = ocr_text.lower()
+    matches = sum(1 for term in medical_report_terms if term in lowered)
+
+    if matches < 2 and report_type == "Unknown Report":
+        return {
+            "is_valid_report": False,
+            "report_type": "Unknown Report",
+            "message": "This document does not appear to be a valid medical report."
+        }
+
+    return {
+        "is_valid_report": True,
+        "report_type": report_type,
+        "message": f"Valid {report_type} medical report detected."
+    }

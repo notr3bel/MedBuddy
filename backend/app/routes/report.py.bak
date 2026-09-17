@@ -1,0 +1,106 @@
+import time
+import asyncio
+from fastapi import APIRouter, UploadFile, File, Form
+from typing import Optional
+
+from app.services.input_validator import validate_input_file
+from app.services.file_converter import prepare_input_for_analysis
+from app.services.ocr import extract_text_from_image
+from app.services.report_summarizer import summarize_medical_report
+from app.services.supabase_client import save_analysis_history
+from app.services.structured_logger import log_audit_event
+from app.services.security import sanitize_prompt_text
+
+REPORT_REJECTION_MSG = (
+    "This image doesn't seem to be a report.\n"
+    "Try uploading:\n\n"
+    "📄 A doctor's report\n"
+    "📸 A clear, well-lit photo\n"
+    "📑 A single report page"
+)
+
+router = APIRouter(prefix="/api")
+
+@router.post("/report")
+async def analyze_report(
+    file: UploadFile = File(...), 
+    lang: str = Form("en"),
+    user_id: Optional[str] = Form(None)
+):
+    total_start = time.time()
+    filename = file.filename or ""
+
+    # 1. Input Validation
+    raw_bytes = await file.read()
+    input_val = validate_input_file(raw_bytes, filename)
+    if not input_val["valid"]:
+        log_audit_event("report_rejected", time.time() - total_start, status="REJECTED_INPUT", warnings=[input_val["error"]])
+        return {
+            "success": False,
+            "message": REPORT_REJECTION_MSG
+        }
+
+    # Normalize file into standard JPEG image bytes + extract native PDF text
+    prepared = prepare_input_for_analysis(raw_bytes, filename)
+    report_bytes = prepared["image_bytes"]
+    pdf_native_text = prepared["pdf_native_text"]
+
+    # 2. Azure OCR Execution
+    ocr_start = time.time()
+    try:
+        extracted_text = await extract_text_from_image(report_bytes)
+        if pdf_native_text and pdf_native_text not in (extracted_text or ""):
+            extracted_text = pdf_native_text + "\n" + (extracted_text or "")
+    except Exception as e:
+        extracted_text = pdf_native_text or ""
+    ocr_sec = time.time() - ocr_start
+
+    sanitized_text = sanitize_prompt_text(extracted_text or "")
+
+    # 3. Direct Gemini Multimodal AI Vision + OCR Report Summarization
+    gemini_start = time.time()
+    try:
+        result = await summarize_medical_report(sanitized_text, language=lang, image_bytes=report_bytes)
+    except Exception as e:
+        log_audit_event("report_failed", time.time() - total_start, status="GEMINI_FAILURE")
+        return {
+            "success": False,
+            "message": REPORT_REJECTION_MSG
+        }
+    gemini_sec = time.time() - gemini_start
+
+    is_valid = bool(isinstance(result, dict) and result.get("is_valid_report", False))
+    summary_text = result.get("summary", "") if is_valid else REPORT_REJECTION_MSG
+    abnormal_count = result.get("abnormal_count", 0) if is_valid else 0
+    report_type = result.get("report_type", "Medical Report") if is_valid else "Unknown Report"
+
+    # Save to user history in Supabase
+    if user_id and summary_text and is_valid:
+        await save_analysis_history(user_id, "report", summary_text)
+
+    total_sec = time.time() - total_start
+
+    # Audit logging
+    log_audit_event(
+        event_type="report_analysis",
+        processing_time_sec=total_sec,
+        ocr_duration_sec=ocr_sec,
+        gemini_duration_sec=gemini_sec,
+        doc_type=report_type,
+        confidence_score=1.0,
+        medicine_count=0,
+        status="SUCCESS" if is_valid else "REJECTED_REPORT"
+    )
+
+    if not is_valid:
+        return {
+            "success": False,
+            "message": REPORT_REJECTION_MSG
+        }
+
+    return {
+        "success": True,
+        "summary": summary_text,
+        "abnormal_count": abnormal_count,
+        "report_type": report_type
+    }

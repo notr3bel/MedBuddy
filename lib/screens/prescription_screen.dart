@@ -676,10 +676,9 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                     subtitle: Text("${med["dosage"]} • ${med["duration"]}\n${med["timing"]}"),
                   ),
                 );
-              }).toList(),
-            ),
-          ],
-        ),
+              }),
+            ],
+          ),
           const SizedBox(height: 25),
           const Divider(),
           const SizedBox(height: 15),

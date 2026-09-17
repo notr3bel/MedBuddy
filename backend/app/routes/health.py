@@ -4,18 +4,39 @@ from app.services.supabase_client import supabase
 from google import genai
 import os
 import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
 
 router = APIRouter(prefix="/api")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY")
 MODEL = "gemini-2.5-flash"
 
-@router.get("/health", response_model=BasicResponse)
-def health_check():
-    return BasicResponse(
-        success=True,
-        message="Backend is healthy"
-    )
+from app.services.resilience import get_system_health_status, METRICS
+
+@router.get("/health")
+async def health_check():
+    """
+    Task 11 Deep System Health Check: Exposes health status for Azure Vision OCR,
+    Gemini AI, Supabase DB, and TrOCR GPU.
+    """
+    health = await get_system_health_status()
+    return {
+        "success": True,
+        "health": health
+    }
+
+@router.get("/metrics")
+async def get_metrics():
+    """
+    Task 11 Application Metrics Endpoint: Returns request count, avg latency,
+    OCR failures, Gemini retries, cache hit rate, and document classification counts.
+    """
+    return {
+        "success": True,
+        "metrics": METRICS.get_metrics_summary()
+    }
 
 @router.get("/health-summary")
 async def get_health_summary(user_id: str = Query(...), lang: str = Query("en")):
@@ -31,6 +52,9 @@ async def get_health_summary(user_id: str = Query(...), lang: str = Query("en"))
         target_lang = lang_map.get(lang, "English")
 
         # Fetch last 5 records from Supabase
+        if not supabase:
+            raise HTTPException(status_code=503, detail="Database client unavailable")
+
         response = supabase.table("analysis_history") \
             .select("*") \
             .eq("user_id", user_id) \
@@ -73,8 +97,16 @@ YOUR RESPONSE MUST BE IN THE FOLLOWING LANGUAGE: {target_lang}
 """
 
         def _generate():
-            resp = client.models.generate_content(model=MODEL, contents=prompt)
-            return resp.text if hasattr(resp, "text") else ""
+            resp = client.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    max_output_tokens=150,
+                    temperature=0.3,
+                    thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+                )
+            )
+            return (getattr(resp, "text", "") or "")
 
         ai_summary = await asyncio.to_thread(_generate)
         

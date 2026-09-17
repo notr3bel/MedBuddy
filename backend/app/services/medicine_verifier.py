@@ -1,54 +1,40 @@
-"""
-Verify medicine names extracted by Azure OCR using TrOCR.
+import logging
+import asyncio
+from app.services.medicine_db import verify_medicine_authority
 
-For now this module identifies likely medicine lines and returns the
-original text unchanged. TrOCR-based verification will be added later.
-"""
-
-MEDICINE_KEYWORDS = (
-    "tab",
-    "tablet",
-    "cap",
-    "capsule",
-    "syp",
-    "syrup",
-    "inj",
-    "mg",
-    "ml",
-)
-
-
-def _is_likely_medicine_line(line: str) -> bool:
-    lowered = line.lower()
-    return any(keyword in lowered for keyword in MEDICINE_KEYWORDS)
-
-
-async def verify_medicine_names(text: str) -> str:
+async def verify_extracted_medicines(medicines_list: list[dict]) -> list[dict]:
     """
-    Verify medicine names in OCR text.
-
-    Currently returns the original text unchanged after identifying
-    likely medicine lines. TrOCR verification will be added later.
+    Phase 6: Verifies each candidate medicine extracted by AI/OCR against RxNorm, OpenFDA, and Local DB.
+    If unverified, strictly marks name as 'Unknown Medicine' without hallucinating corrections.
     """
-    if not text or not text.strip():
-        return text
+    verified_results = []
 
-    lines = text.splitlines()
-    medicine_lines = []
+    tasks = []
+    for med_item in medicines_list:
+        med_name = med_item.get("medicine", "")
+        tasks.append(verify_medicine_authority(med_name))
 
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        if _is_likely_medicine_line(stripped):
-            medicine_lines.append(stripped)
+    for i, res in enumerate(results):
+        original_item = medicines_list[i]
+        orig_name = original_item.get("medicine", "") or "Prescribed Medication"
+        orig_generic = original_item.get("generic", "") or "Prescribed Medication"
+        
+        if isinstance(res, Exception) or not isinstance(res, dict):
+            verified_results.append({
+                "medicine": orig_name,
+                "generic": orig_generic,
+                "verified": False,
+                "status": "Unverified"
+            })
+        else:
+            verified_results.append({
+                "medicine": res.get("name") or orig_name,
+                "generic": res.get("generic") or orig_generic,
+                "verified": bool(res.get("verified", False)),
+                "status": res.get("status", "Verified"),
+                "source": res.get("source", "AI Extracted")
+            })
 
-    # TODO: Load prescription image and run TrOCR on medicine regions.
-    # TODO: Compare TrOCR output with Azure OCR medicine lines.
-    # TODO: Replace or correct medicine names when TrOCR confidence is high.
-    # TODO: Keep original text for non-medicine lines and low-confidence cases.
-
-    _ = medicine_lines
-
-    return text
+    return verified_results

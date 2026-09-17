@@ -22,10 +22,7 @@ def _analyze(image_bytes):
 
 async def extract_text_from_image(image_bytes: bytes):
 
-    result = client.analyze(
-        image_data=image_bytes,
-        visual_features=[VisualFeatures.READ]
-    )
+    result = await asyncio.to_thread(_analyze, image_bytes)
 
     extracted_text = ""
 

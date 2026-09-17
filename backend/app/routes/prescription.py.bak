@@ -1,0 +1,200 @@
+import time
+import asyncio
+from fastapi import APIRouter, UploadFile, File, Form
+from typing import Optional
+
+from app.services.input_validator import validate_input_file
+from app.services.file_converter import prepare_input_for_analysis
+from app.services.ocr import extract_text_from_image
+from app.services.trocr_service import predict_medicine_name
+from app.services.ocr_fusion import merge_ocr_results
+from app.services.prescription_ai import analyze_prescription_ai
+from app.services.medicine_verifier import verify_extracted_medicines
+from app.services.prescription_validator import sanitize_prescription_schedule
+from app.services.cache_service import generate_ocr_hash, get_cached_prescription, save_prescription_to_cache
+from app.services.supabase_client import save_analysis_history
+from app.services.structured_logger import log_audit_event
+from app.services.security import sanitize_prompt_text
+
+PRESCRIPTION_REJECTION_MSG = (
+    "This image doesn't seem to be a prescription.\n"
+    "Try uploading:\n\n"
+    "📄 A doctor's prescription\n"
+    "📸 A clear, well-lit photo\n"
+    "📑 A single prescription page"
+)
+
+router = APIRouter(prefix="/api")
+
+@router.post("/prescription")
+async def analyze_prescription(
+    file: UploadFile = File(...),
+    lang: str = Form("en"),
+    user_id: Optional[str] = Form(None)
+):
+    total_start = time.time()
+    filename = file.filename or ""
+
+    # 1. Input Validation (File non-empty)
+    raw_bytes = await file.read()
+    input_val = validate_input_file(raw_bytes, filename)
+    if not input_val["valid"]:
+        log_audit_event("prescription_rejected", time.time() - total_start, status="REJECTED_INPUT", warnings=[input_val["error"]])
+        return {
+            "success": True,
+            "is_valid_prescription": False,
+            "extracted_text": "",
+            "detected_medicines": [],
+            "schedule": [],
+            "explanation": PRESCRIPTION_REJECTION_MSG,
+            "precautions": []
+        }
+
+    # Normalize file into standard JPEG image bytes + extract native PDF text
+    prepared = prepare_input_for_analysis(raw_bytes, filename)
+    image_bytes = prepared["image_bytes"]
+    pdf_native_text = prepared["pdf_native_text"]
+
+    # 2. Concurrently execute Azure OCR & TrOCR
+    azure_start = time.time()
+    azure_end = azure_start
+    trocr_start_time = time.time()
+    trocr_end = trocr_start_time
+
+    async def run_azure():
+        nonlocal azure_end
+        res = await extract_text_from_image(image_bytes)
+        azure_end = time.time()
+        return res
+
+    def run_trocr():
+        nonlocal trocr_end
+        res = predict_medicine_name(image_bytes)
+        trocr_end = time.time()
+        return res
+
+    azure_task = asyncio.create_task(run_azure())
+    trocr_task = asyncio.create_task(asyncio.to_thread(run_trocr))
+
+    try:
+        extracted_text, trocr_prediction = await asyncio.gather(azure_task, trocr_task)
+    except Exception:
+        try:
+            extracted_text = await azure_task
+            trocr_prediction = "OCR_ERROR"
+        except Exception:
+            extracted_text = ""
+            trocr_prediction = ""
+
+    azure_sec = azure_end - azure_start
+    trocr_sec = trocr_end - trocr_start_time
+
+    if pdf_native_text and pdf_native_text not in (extracted_text or ""):
+        extracted_text = pdf_native_text + "\n" + (extracted_text or "")
+
+    merged_text = merge_ocr_results(extracted_text or "", trocr_prediction or "")
+    sanitized_merged_text = sanitize_prompt_text(merged_text)
+
+    # 3. Cache lookup via SHA256 of OCR text
+    ocr_hash = generate_ocr_hash(sanitized_merged_text or str(len(image_bytes)))
+    cached_data = await get_cached_prescription(ocr_hash)
+
+    gemini_sec = 0.0
+
+    if cached_data and cached_data.get("is_valid_prescription") is True:
+        final_result = cached_data
+    else:
+        gemini_start = time.time()
+        try:
+            # Direct Gemini AI Multimodal Vision + OCR Analysis
+            raw_analysis = await analyze_prescription_ai(sanitized_merged_text, lang, image_bytes)
+            gemini_sec = time.time() - gemini_start
+
+            # Verify Extracted Medicine names
+            raw_meds = raw_analysis.get("medicines", [])
+            verified_meds = await verify_extracted_medicines(raw_meds)
+            raw_analysis["medicines"] = verified_meds
+
+            # Sanitize Prescription Schedule
+            raw_schedule = raw_analysis.get("schedule", [])
+            sanitized_schedule = sanitize_prescription_schedule(raw_schedule)
+            raw_analysis["schedule"] = sanitized_schedule
+
+            final_result = raw_analysis
+
+            # Save to cache if valid
+            if final_result.get("is_valid_prescription"):
+                await save_prescription_to_cache(ocr_hash, sanitized_merged_text, final_result)
+
+        except Exception as gemini_err:
+            gemini_sec = time.time() - gemini_start
+            final_result = {
+                "is_valid_prescription": False,
+                "verified_text": sanitized_merged_text,
+                "medicines": [],
+                "schedule": [],
+                "explanation": PRESCRIPTION_REJECTION_MSG,
+                "precautions": []
+            }
+
+    is_valid = bool(isinstance(final_result, dict) and final_result.get("is_valid_prescription", False))
+    raw_meds_list = final_result.get("medicines", []) if isinstance(final_result, dict) else []
+    detected_meds: list[str] = []
+    if isinstance(raw_meds_list, list):
+        for m in raw_meds_list:
+            if isinstance(m, dict) and m.get("medicine"):
+                detected_meds.append(str(m["medicine"]))
+
+    # Also check schedule list if detected_meds is empty
+    if not detected_meds and isinstance(final_result, dict) and isinstance(final_result.get("schedule"), list):
+        for item in final_result.get("schedule", []):
+            if isinstance(item, dict) and item.get("medicine"):
+                detected_meds.append(str(item["medicine"]))
+
+    if (detected_meds or final_result.get("schedule")) and isinstance(final_result, dict):
+        is_valid = True
+
+    if not is_valid or not detected_meds:
+        explanation_text = PRESCRIPTION_REJECTION_MSG
+        is_valid = False
+    else:
+        explanation_text = str(final_result.get("explanation", "")) if isinstance(final_result, dict) else ""
+
+    # Save to user history in Supabase (if user_id provided)
+    if user_id and explanation_text and is_valid:
+        await save_analysis_history(user_id, "prescription", explanation_text)
+
+    total_sec = time.time() - total_start
+
+    # Audit logging
+    log_audit_event(
+        event_type="prescription_analysis",
+        processing_time_sec=total_sec,
+        ocr_duration_sec=azure_sec + trocr_sec,
+        gemini_duration_sec=gemini_sec,
+        doc_type="Prescription",
+        confidence_score=1.0,
+        medicine_count=len(detected_meds),
+        status="SUCCESS" if is_valid else "INVALID_PRESCRIPTION"
+    )
+
+    if not is_valid:
+        return {
+            "success": True,
+            "is_valid_prescription": False,
+            "extracted_text": sanitized_merged_text,
+            "detected_medicines": [],
+            "schedule": [],
+            "explanation": PRESCRIPTION_REJECTION_MSG,
+            "precautions": []
+        }
+
+    return {
+        "success": True,
+        "is_valid_prescription": True,
+        "extracted_text": sanitized_merged_text,
+        "detected_medicines": detected_meds,
+        "schedule": final_result.get("schedule", []),
+        "explanation": explanation_text,
+        "precautions": final_result.get("precautions", [])
+    }

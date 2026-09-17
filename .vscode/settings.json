@@ -1,0 +1,11 @@
+{
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python",
+  "gradle.java.home": "C:\\Users\\Harshath\\.jdks\\jbr-21.0.11",
+  "java.import.gradle.java.home": "C:\\Users\\Harshath\\.jdks\\jbr-21.0.11",
+  "java.jdt.ls.java.home": "C:\\Users\\Harshath\\.jdks\\jbr-21.0.11",
+  "java.home": "C:\\Users\\Harshath\\.jdks\\jbr-21.0.11"
+}
+

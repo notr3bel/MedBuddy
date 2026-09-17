@@ -3,11 +3,7 @@ import asyncio
 from google import genai
 from app.services.text_cleaner import remove_markdown
 
-
-# Reads your API key from the GEMINI_API_KEY environment variable.
-# You can also set GOOGLE_API_KEY as an alternative environment variable name.
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY")
 
 async def explain_prescription(text: str, language: str = "en") -> str:
     lang_map = {
@@ -61,10 +57,10 @@ CONSTRAINTS:
 
     def _generate():
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
         )
-        text = response.text.strip() if hasattr(response, "text") and response.text else ""
-        return text
+        resp_text = response.text.strip() if hasattr(response, "text") and response.text else ""
+        return resp_text
 
     return await asyncio.to_thread(_generate)

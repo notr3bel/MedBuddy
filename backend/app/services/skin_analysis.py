@@ -3,10 +3,11 @@ from azure.ai.vision.imageanalysis.models import VisualFeatures
 from azure.core.credentials import AzureKeyCredential
 import os
 from google import genai
+from google.genai import types
 from app.services.text_cleaner import remove_markdown
 
-endpoint = os.getenv("AZURE_VISION_ENDPOINT")
-key = os.getenv("AZURE_VISION_KEY")
+endpoint = os.getenv("AZURE_VISION_ENDPOINT") or ""
+key = os.getenv("AZURE_VISION_KEY") or ""
 
 vision_client = ImageAnalysisClient(
     endpoint=endpoint,
@@ -14,7 +15,7 @@ vision_client = ImageAnalysisClient(
 )
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-3.6-flash"
 
 
 def analyze_skin(image_bytes, language: str = "en"):
@@ -61,9 +62,13 @@ Rules:
 - Suggest seeing a dermatologist if the condition persists or is severe.
 """
 
+    config = types.GenerateContentConfig(
+        temperature=0.3,
+    )
     response = gemini_client.models.generate_content(
         model=MODEL,
-        contents=prompt
+        contents=prompt,
+        config=config,
     )
 
     return response.text if response.text else ""
