@@ -210,15 +210,26 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
-        title: Text(_getText('title'), 
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(
+          _getText('title'),
+          style: TextStyle(
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -227,13 +238,15 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader(_getText('pass_auth')),
+            _buildSectionHeader(_getText('pass_auth'), isDark, primaryColor),
             const SizedBox(height: 15),
             _buildSecurityCard(
               title: _getText('change_pass'),
               subtitle: _getText('update_pass_sub'),
               icon: Icons.lock_outline,
-              onTap: () => _showChangePasswordDialog(),
+              onTap: () => _showChangePasswordDialog(isDark, primaryColor),
+              isDark: isDark,
+              iconColor: primaryColor,
             ),
             const SizedBox(height: 10),
             _buildSecurityCard(
@@ -245,32 +258,39 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                   SnackBar(content: Text(_getText('2fa_soon'))),
                 );
               },
+              isDark: isDark,
+              iconColor: primaryColor,
             ),
             const SizedBox(height: 30),
-            _buildSectionHeader(_getText('data_privacy')),
+            _buildSectionHeader(_getText('data_privacy'), isDark, primaryColor),
             const SizedBox(height: 15),
             _buildSecurityCard(
               title: _getText('med_access'),
               subtitle: _getText('med_access_sub'),
               icon: Icons.visibility_outlined,
               onTap: () {},
+              isDark: isDark,
+              iconColor: primaryColor,
             ),
-             const SizedBox(height: 10),
+            const SizedBox(height: 10),
             _buildSecurityCard(
               title: _getText('activity'),
               subtitle: _getText('activity_sub'),
               icon: Icons.history,
               onTap: () {},
+              isDark: isDark,
+              iconColor: primaryColor,
             ),
             const SizedBox(height: 30),
-            _buildSectionHeader(_getText('danger')),
+            _buildSectionHeader(_getText('danger'), isDark, const Color(0xFFEF4444)),
             const SizedBox(height: 15),
             _buildSecurityCard(
               title: _getText('delete'),
               subtitle: _getText('delete_sub'),
               icon: Icons.delete_forever_outlined,
-              iconColor: Colors.red,
+              iconColor: isDark ? const Color(0xFFF87171) : Colors.red,
               onTap: () {},
+              isDark: isDark,
             ),
           ],
         ),
@@ -278,13 +298,13 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, bool isDark, Color color) {
     return Text(
       title,
       style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.bold,
-        color: Colors.teal.shade700,
+        color: color,
         letterSpacing: 1.2,
       ),
     );
@@ -295,15 +315,19 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     required String subtitle,
     required IconData icon,
     required VoidCallback onTap,
-    Color iconColor = Colors.teal,
+    required bool isDark,
+    Color iconColor = const Color(0xFF0F9D8A),
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -314,28 +338,44 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: 0.1),
+            color: iconColor.withValues(alpha: isDark ? 0.2 : 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: iconColor),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            fontSize: 13,
+          ),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios_rounded,
+          size: 14,
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
+        ),
         onTap: onTap,
       ),
     );
   }
 
-  void _showChangePasswordDialog() {
+  void _showChangePasswordDialog(bool isDark, Color primaryColor) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom + 30,
@@ -347,22 +387,32 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_getText('change_pass'), 
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            Text(
+              _getText('change_pass'),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+              ),
+            ),
             const SizedBox(height: 10),
-            Text(_getText('enter_new'), 
-              style: TextStyle(color: Colors.grey.shade600)),
+            Text(
+              _getText('enter_new'),
+              style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600),
+            ),
             const SizedBox(height: 25),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: _inputDecoration(_getText('new_pass'), Icons.lock_outline),
+              style: TextStyle(color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A)),
+              decoration: _inputDecoration(_getText('new_pass'), Icons.lock_outline, isDark, primaryColor),
             ),
             const SizedBox(height: 15),
             TextField(
               controller: _confirmPasswordController,
               obscureText: true,
-              decoration: _inputDecoration(_getText('confirm_pass'), Icons.lock_clock_outlined),
+              style: TextStyle(color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A)),
+              decoration: _inputDecoration(_getText('confirm_pass'), Icons.lock_clock_outlined, isDark, primaryColor),
             ),
             const SizedBox(height: 30),
             SizedBox(
@@ -371,14 +421,21 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
               child: ElevatedButton(
                 onPressed: _isLoading ? null : _updatePassword,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.teal,
+                  backgroundColor: primaryColor,
+                  foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                   elevation: 0,
                 ),
-                child: _isLoading 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : Text(_getText('update_btn'), 
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                child: _isLoading
+                    ? CircularProgressIndicator(color: isDark ? const Color(0xFF0F172A) : Colors.white)
+                    : Text(
+                        _getText('update_btn'),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -387,19 +444,24 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
+  InputDecoration _inputDecoration(String label, IconData icon, bool isDark, Color primaryColor) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, color: Colors.teal),
+      labelStyle: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+      prefixIcon: Icon(icon, color: primaryColor),
       filled: true,
-      fillColor: Colors.grey[100],
+      fillColor: isDark ? const Color(0xFF0F172A) : Colors.grey[100],
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(15),
-        borderSide: const BorderSide(color: Colors.teal, width: 2),
+        borderSide: BorderSide(color: primaryColor, width: 2),
       ),
     );
   }

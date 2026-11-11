@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 class SosScreen extends StatelessWidget {
   static const String routeName = '/sos';
   final String language;
@@ -12,16 +13,12 @@ class SosScreen extends StatelessWidget {
   }
 
   Future<void> openHospitalMap() async {
-    final Uri mapUri = Uri.parse(
-        "https://www.google.com/maps/search/hospitals+near+me");
-
+    final Uri mapUri = Uri.parse("https://www.google.com/maps/search/hospitals+near+me");
     await launchUrl(mapUri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> openPoliceMap() async {
-    final Uri mapUri =
-        Uri.parse("https://www.google.com/maps/search/police+station+near+me");
-
+    final Uri mapUri = Uri.parse("https://www.google.com/maps/search/police+station+near+me");
     await launchUrl(mapUri, mode: LaunchMode.externalApplication);
   }
 
@@ -81,43 +78,86 @@ class SosScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFFF87171) : const Color(0xFFEF4444);
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
         title: Text(_getText('title')),
+        backgroundColor: primaryColor,
+        foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ElevatedButton(
+            const SizedBox(height: 10),
+            _buildSosButton(
+              title: "🚑 ${_getText('Ambulance')} (108)",
+              color: const Color(0xFFEF4444),
+              isDark: isDark,
               onPressed: () => callNumber("108"),
-              child: Text("🚑 ${_getText('Ambulance')} (108)"),
             ),
-            SizedBox(height: 10),
-            ElevatedButton(
+            const SizedBox(height: 14),
+            _buildSosButton(
+              title: "👮 ${_getText('Police')} (100)",
+              color: const Color(0xFF2563EB),
+              isDark: isDark,
               onPressed: () => callNumber("100"),
-              child: Text("👮 ${_getText('Police')} (100)"),
             ),
-            SizedBox(height: 10),
-            ElevatedButton(
+            const SizedBox(height: 14),
+            _buildSosButton(
+              title: "🔥 ${_getText('Fire')} (101)",
+              color: const Color(0xFFD97706),
+              isDark: isDark,
               onPressed: () => callNumber("101"),
-              child: Text("🔥 ${_getText('Fire')} (101)"),
             ),
-            SizedBox(height: 20),
-            ElevatedButton(
+            const SizedBox(height: 28),
+            _buildSosButton(
+              title: "📍 ${_getText('FindHospital')}",
+              color: isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A),
+              isDark: isDark,
               onPressed: openHospitalMap,
-              child: Text("📍 ${_getText('FindHospital')}"),
             ),
-            SizedBox(height: 10),
-            ElevatedButton(
+            const SizedBox(height: 14),
+            _buildSosButton(
+              title: "📍 ${_getText('FindPolice')}",
+              color: isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED),
+              isDark: isDark,
               onPressed: openPoliceMap,
-              child: Text("📍 ${_getText('FindPolice')}"),
             ),
           ],
         ),
       ),
     );
   }
-}
 
+  Widget _buildSosButton({
+    required String title,
+    required Color color,
+    required bool isDark,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      height: 56,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 2,
+        ),
+        onPressed: onPressed,
+        child: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}

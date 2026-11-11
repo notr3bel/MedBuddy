@@ -23,7 +23,7 @@ def prepare_input_for_analysis(file_bytes: bytes, filename: str = "") -> dict:
     }
     """
     if not file_bytes:
-        return {"image_bytes": b"", "file_type": "unknown", "pdf_native_text": ""}
+        return {"image_bytes": b"", "page_images": [], "file_type": "unknown", "pdf_native_text": ""}
 
     ext = ""
     if filename and "." in filename:
@@ -38,54 +38,45 @@ def prepare_input_for_analysis(file_bytes: bytes, filename: str = "") -> dict:
 
 def _process_pdf(file_bytes: bytes) -> dict:
     native_text_parts = []
-    # 1. Extract native text if available via pypdf
+    # 1. Extract native text across all PDF pages if available via pypdf
     try:
         reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-        for page in reader.pages:
+        for idx, page in enumerate(reader.pages):
             text = page.extract_text()
-            if text:
-                native_text_parts.append(text)
+            if text and text.strip():
+                native_text_parts.append(f"--- Page {idx + 1} ---\n{text.strip()}")
     except Exception as e:
         logging.warning(f"pypdf text extraction warning: {e}")
 
-    pdf_native_text = "\n".join(native_text_parts).strip()
+    pdf_native_text = "\n\n".join(native_text_parts).strip()
 
-    # 2. Render PDF pages into a single combined PIL Image via pypdfium2
+    # 2. Render PDF pages into individual high-clarity JPEG page images via pypdfium2
     try:
         pdf = pypdfium2.PdfDocument(file_bytes)
         num_pages = len(pdf)
         images = []
-        
-        # Limit to first 5 pages max to avoid memory issues
-        pages_to_render = min(num_pages, 5)
+        page_images_bytes = []
+
+        # Limit to first 6 pages max to keep memory and latency low
+        pages_to_render = min(num_pages, 6)
         for i in range(pages_to_render):
             page = pdf[i]
-            # Render at 200 DPI scale (200/72) for crisp OCR and Vision processing
-            pil_image = page.render(scale=200/72).to_pil()
-            pil_image = pil_image.convert("RGB")
+            # Render at 160 DPI scale for crisp OCR and Vision processing
+            pil_image = page.render(scale=160/72).to_pil().convert("RGB")
+            if max(pil_image.width, pil_image.height) > 1600:
+                pil_image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
             images.append(pil_image)
 
+            p_buf = io.BytesIO()
+            pil_image.save(p_buf, format="JPEG", quality=85, optimize=True)
+            page_images_bytes.append(p_buf.getvalue())
+
         if not images:
-            return {"image_bytes": file_bytes, "file_type": "pdf", "pdf_native_text": pdf_native_text}
-
-        if len(images) == 1:
-            combined_image = images[0]
-        else:
-            # Concatenate pages vertically
-            total_width = max(img.width for img in images)
-            total_height = sum(img.height for img in images)
-            combined_image = Image.new("RGB", (total_width, total_height), (255, 255, 255))
-            y_offset = 0
-            for img in images:
-                combined_image.paste(img, (0, y_offset))
-                y_offset += img.height
-
-        output_buf = io.BytesIO()
-        combined_image.save(output_buf, format="JPEG", quality=90)
-        rendered_bytes = output_buf.getvalue()
+            return {"image_bytes": file_bytes, "page_images": [], "file_type": "pdf", "pdf_native_text": pdf_native_text}
 
         return {
-            "image_bytes": rendered_bytes,
+            "image_bytes": page_images_bytes[0],
+            "page_images": page_images_bytes,
             "file_type": "pdf",
             "pdf_native_text": pdf_native_text
         }
@@ -94,6 +85,7 @@ def _process_pdf(file_bytes: bytes) -> dict:
         logging.error(f"PDF rendering error: {e}")
         return {
             "image_bytes": file_bytes,
+            "page_images": [],
             "file_type": "pdf",
             "pdf_native_text": pdf_native_text
         }

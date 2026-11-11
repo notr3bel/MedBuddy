@@ -88,16 +88,16 @@ def _validate_image(file_bytes: bytes) -> dict:
         mean_val = np.mean(gray)
         std_val = np.std(gray)
 
-        # Check completely white / blank image
-        if mean_val > 235 or (mean_val > 200 and std_val < 8):
+        # Check completely white / blank image (must have both extremely high brightness AND almost zero variance)
+        if (mean_val > 248 and std_val < 6) or (mean_val > 235 and std_val < 3):
             return {
                 "valid": False,
                 "error": "Image is completely white or blank. Please capture a clear medical document.",
                 "file_type": "image"
             }
 
-        # Check completely black image
-        if mean_val < 20 or (mean_val < 40 and std_val < 8):
+        # Check completely black image (must have both extremely low brightness AND almost zero variance)
+        if (mean_val < 15 and std_val < 6) or (mean_val < 25 and std_val < 3):
             return {
                 "valid": False,
                 "error": "Image is completely black or dark. Please capture a clear medical document.",

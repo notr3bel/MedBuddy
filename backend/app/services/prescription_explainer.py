@@ -57,7 +57,7 @@ CONSTRAINTS:
 
     def _generate():
         response = client.models.generate_content(
-            model="gemini-3.6-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         resp_text = response.text.strip() if hasattr(response, "text") and response.text else ""

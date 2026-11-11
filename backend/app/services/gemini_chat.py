@@ -11,8 +11,14 @@ from app.services.supabase_client import get_user_recent_history
 logging.basicConfig(filename="gemini_debug.log", level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-3.6-flash"
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY",
+    http_options=types.HttpOptions(
+        timeout=12000,
+        retry_options=types.HttpRetryOptions(attempts=1),
+    ),
+)
+MODEL_CANDIDATES = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
 
 
 async def get_chat_response(query: str, language: str = "en", user_id: Optional[str] = None) -> str:
@@ -62,23 +68,33 @@ INSTRUCTIONS:
 """
 
     async def _call_gemini():
-        try:
-            def _generate() -> str:
-                config = types.GenerateContentConfig(
-                    max_output_tokens=512,
-                    temperature=0.7,
-                )
-                response = client.models.generate_content(
-                    model=MODEL,
-                    contents=prompt,
-                    config=config,
-                )
-                text = response.text.strip() if hasattr(response, "text") and response.text else ""
-                return remove_markdown(text)
-            
-            return await asyncio.to_thread(_generate)
-        except Exception as e:
-            logging.error(f"Gemini API Error: {str(e)}")
-            return f"Error: {str(e)}"
+        last_err = ""
+        for model_name in MODEL_CANDIDATES:
+            try:
+                def _generate(m=model_name) -> str:
+                    config = types.GenerateContentConfig(
+                        max_output_tokens=512,
+                        temperature=0.7,
+                    )
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                        config=config,
+                    )
+                    text = response.text.strip() if hasattr(response, "text") and response.text else ""
+                    return remove_markdown(text)
+
+                res = await asyncio.to_thread(_generate)
+                if res:
+                    return res
+            except Exception as e:
+                last_err = str(e)
+                logging.error(f"Gemini API Error ({model_name}): {last_err}")
+                if "403" in last_err or "PERMISSION_DENIED" in last_err:
+                    break
+
+        if "403" in last_err or "PERMISSION_DENIED" in last_err:
+            return "The Gemini API key does not have billing or free tier enabled on its Google Cloud project. Please enable billing in Google AI Studio or use an active API key."
+        return f"Error: {last_err}"
 
     return await _call_gemini()

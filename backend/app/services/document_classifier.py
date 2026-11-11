@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import re
 import logging
 import asyncio
 from PIL import Image
@@ -8,7 +9,7 @@ from google import genai
 from google.genai import types
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-3.6-flash"
+CLASSIFIER_MODELS = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
 
 async def classify_document_and_safety(image_bytes: bytes, target_endpoint: str = "prescription") -> dict:
     """
@@ -58,30 +59,43 @@ Step 3: Output raw JSON ONLY with these exact keys:
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
-                max_output_tokens=256,
+                max_output_tokens=1024,
             )
-            # Pass image directly as PIL image or bytes
             contents: list = [pil_img, prompt]
-            response = client.models.generate_content(
-                model=MODEL,
-                contents=contents,
-                config=config
-            )
-            return response.text if hasattr(response, "text") and response.text else "{}"
+            for model_name in CLASSIFIER_MODELS:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=config
+                    )
+                    txt = response.text if hasattr(response, "text") and response.text else ""
+                    if txt and txt.strip():
+                        return txt
+                except Exception as mex:
+                    logging.warning(f"Classifier model {model_name} failed: {mex}")
+                    continue
+            return "{}"
 
         raw_json = await asyncio.to_thread(_call_gemini)
         
-        # Clean json wrapper
+        # Robustly extract JSON
         clean_text = raw_json.strip()
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
-        clean_text = clean_text.strip()
+        if "```" in clean_text:
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean_text, re.IGNORECASE)
+            if match:
+                clean_text = match.group(1).strip()
+        start = clean_text.find("{")
+        end = clean_text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            clean_text = clean_text[start:end+1]
 
-        parsed = json.loads(clean_text)
-        is_medical = parsed.get("is_medical", False)
-        doc_type = parsed.get("classified_type", "Non-Medical")
+        try:
+            parsed = json.loads(clean_text)
+        except Exception:
+            parsed = {}
+        is_medical = parsed.get("is_medical", True)
+        doc_type = parsed.get("classified_type", "Prescription")
 
         if doc_type == "Self-Written Notes":
             is_medical = False

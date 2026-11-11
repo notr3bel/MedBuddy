@@ -1,13 +1,13 @@
 import time
 import asyncio
 import json
+import logging
 from fastapi import APIRouter, UploadFile, File, Form
 from typing import Optional
 
 from app.services.input_validator import validate_input_file
 from app.services.quality_analyzer import analyze_image_quality
 from app.services.file_converter import prepare_input_for_analysis
-from app.services.document_classifier import classify_document_and_safety
 from app.services.ocr import extract_text_from_image
 from app.services.report_validator import validate_report_content, build_ocr_fallback_report_summary
 from app.services.report_summarizer import summarize_medical_report
@@ -50,35 +50,41 @@ async def analyze_report(
     if not quality_res.get("pass_quality", True):
         print(f"\nQUALITY_WARNING: {quality_res.get('message')}. Continuing OCR...\n")
 
-    # Normalize file into standard JPEG image bytes + extract native PDF text
+    # Normalize file into standard JPEG image bytes + multi-page images + native PDF text
     prepared = prepare_input_for_analysis(raw_bytes, filename)
     report_bytes = prepared["image_bytes"]
+    page_images = prepared.get("page_images") or ([report_bytes] if report_bytes else [])
     pdf_native_text = prepared["pdf_native_text"]
+    file_type = prepared.get("file_type", "image")
 
-    # 2. Parallel Classification & Azure OCR Execution
+    # 2. Azure OCR Execution (supports multi-page PDFs)
     ocr_start = time.time()
-    doc_class_task = asyncio.create_task(classify_document_and_safety(report_bytes, target_endpoint="report"))
-    ocr_task = asyncio.create_task(extract_text_from_image(report_bytes))
+    extracted_text = ""
+    if file_type == "pdf" and len(pdf_native_text.strip()) >= 100:
+        # Native digital PDF: pypdf already extracted full multi-page text cleanly
+        extracted_text = pdf_native_text
+    else:
+        try:
+            if len(page_images) > 1:
+                ocr_pages = await asyncio.gather(
+                    *(extract_text_from_image(p) for p in page_images),
+                    return_exceptions=True
+                )
+                parts = []
+                for idx, p_res in enumerate(ocr_pages):
+                    if isinstance(p_res, str) and p_res.strip():
+                        parts.append(f"--- Page {idx + 1} ---\n{p_res.strip()}")
+                extracted_text = "\n\n".join(parts)
+            else:
+                extracted_text = await extract_text_from_image(report_bytes)
+        except Exception as err:
+            logging.warning(f"OCR extraction failed: {err}")
+            extracted_text = ""
 
-    try:
-        doc_class, extracted_text = await asyncio.gather(doc_class_task, ocr_task)
-    except Exception:
-        doc_class = await doc_class_task if not doc_class_task.done() else {"is_medical": True, "doc_type": "Medical Report"}
-        extracted_text = await ocr_task if not ocr_task.done() else ""
-
-    if pdf_native_text and pdf_native_text not in (extracted_text or ""):
-        extracted_text = pdf_native_text + "\n" + (extracted_text or "")
+        if pdf_native_text and pdf_native_text not in (extracted_text or ""):
+            extracted_text = pdf_native_text + "\n" + (extracted_text or "")
 
     ocr_sec = time.time() - ocr_start
-
-    # Rejection Check for non-medical reports
-    if not doc_class.get("is_medical", True) or doc_class.get("doc_type") in ["Non-Medical", "Random Document", "Self-Written Notes"]:
-        rej_msg = doc_class.get("rejection_message") or REPORT_REJECTION_MSG
-        log_audit_event("report_rejected", time.time() - total_start, status="REJECTED_NON_MEDICAL")
-        return {
-            "success": False,
-            "message": rej_msg
-        }
 
     sanitized_text = sanitize_prompt_text(extracted_text or "")
 
@@ -106,7 +112,12 @@ async def analyze_report(
     # 4. Direct Gemini Multimodal AI Vision + OCR Report Summarization (Rule #6)
     gemini_start = time.time()
     try:
-        result = await summarize_medical_report(sanitized_text, language=lang, image_bytes=report_bytes)
+        result = await summarize_medical_report(
+            sanitized_text,
+            language=lang,
+            image_bytes=report_bytes,
+            page_images=page_images,
+        )
     except Exception as e:
         log_audit_event("report_failed", time.time() - total_start, status="GEMINI_FAILURE")
         print("[FALLBACK ACTIVATED] Gemini analysis exception. Preserving OCR report results.")
@@ -127,7 +138,8 @@ async def analyze_report(
         print(str(result))
     print("-------------------\n")
 
-    is_valid = bool(
+    gemini_is_valid = result.get("is_valid_report", True) if isinstance(result, dict) else True
+    is_valid = gemini_is_valid and bool(
         (isinstance(result, dict) and result.get("is_valid_report", False)) or 
         val_res.get("is_valid_report", False)
     )
@@ -151,8 +163,9 @@ async def analyze_report(
         print("Reason for rejection:\n-------------------\nDocument does not contain medical report content.\n-------------------\n")
 
     # Save to user history in Supabase
-    if user_id and summary_text and is_valid:
-        await save_analysis_history(user_id, "report", summary_text)
+    user_id_clean = user_id if isinstance(user_id, str) and user_id.strip() else None
+    if user_id_clean and summary_text and is_valid:
+        await save_analysis_history(user_id_clean, "report", summary_text)
 
     total_sec = time.time() - total_start
 

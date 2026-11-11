@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 import asyncio
@@ -21,9 +22,10 @@ async def search_rxnorm_api(query: str) -> dict | None:
     """
     Search NIH RxNorm API for drug validation.
     """
-    url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={query}"
+    clean_q = re.sub(r"^(tab|cap|inj|syp|tablet|capsule)\.?\s*", "", query, flags=re.I).strip()
+    url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={clean_q}"
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
@@ -38,9 +40,10 @@ async def search_openfda_api(query: str) -> dict | None:
     """
     Search OpenFDA API for drug validation.
     """
-    url = f"https://api.fda.gov/drug/label.json?search=openfda.brand_name:{query}+openfda.generic_name:{query}&limit=1"
+    clean_q = re.sub(r"^(tab|cap|inj|syp|tablet|capsule)\.?\s*", "", query, flags=re.I).strip()
+    url = f"https://api.fda.gov/drug/label.json?search=openfda.brand_name:{clean_q}+openfda.generic_name:{clean_q}&limit=1"
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
                 data = resp.json()
@@ -57,8 +60,13 @@ def search_local_db(query: str, threshold: float = 0.78) -> dict | None:
     """
     Fuzzy search against local pharmaceutical database.
     """
+    if not query:
+        return None
+        
+    stripped_query = re.sub(r"^(tab|cap|inj|syp|tablet|capsule)\.?\s*", "", query, flags=re.I).strip()
     clean_query = "".join(c for c in query.lower() if c.isalnum())
-    if not clean_query:
+    clean_stripped = "".join(c for c in stripped_query.lower() if c.isalnum())
+    if not clean_query and not clean_stripped:
         return None
 
     best_match = None
@@ -71,9 +79,11 @@ def search_local_db(query: str, threshold: float = 0.78) -> dict | None:
         clean_brand = "".join(c for c in brand.lower() if c.isalnum())
         clean_generic = "".join(c for c in generic.lower() if c.isalnum())
 
-        score_b = difflib.SequenceMatcher(None, clean_query, clean_brand).ratio()
-        score_g = difflib.SequenceMatcher(None, clean_query, clean_generic).ratio()
-        score = max(score_b, score_g)
+        score_b1 = difflib.SequenceMatcher(None, clean_query, clean_brand).ratio()
+        score_g1 = difflib.SequenceMatcher(None, clean_query, clean_generic).ratio()
+        score_b2 = difflib.SequenceMatcher(None, clean_stripped, clean_brand).ratio()
+        score_g2 = difflib.SequenceMatcher(None, clean_stripped, clean_generic).ratio()
+        score = max(score_b1, score_g1, score_b2, score_g2)
 
         if score > best_score:
             best_score = score

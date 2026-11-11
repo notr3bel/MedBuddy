@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import 'dashboard_screen.dart';
 import 'scan_screen.dart';
 import 'voice_screen.dart';
@@ -14,38 +15,12 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
-  String _selectedLanguage = "en"; // Lift state up if needed for sub-screens
-
-  late List<Widget> _screens;
-
-  @override
-  void initState() {
-    super.initState();
-    _initScreens();
-  }
-
-  void _initScreens() {
-    _screens = [
-      DashboardScreen(
-        language: _selectedLanguage,
-        onLanguageChanged: _handleLanguageChanged,
-      ),
-      ScanScreen(language: _selectedLanguage),
-      VoiceScreen(language: _selectedLanguage),
-      HealthTimelineScreen(language: _selectedLanguage),
-      ProfileScreen(language: _selectedLanguage),
-    ];
-  }
 
   void _handleLanguageChanged(String newLang) {
-    setState(() {
-      _selectedLanguage = newLang;
-      // Re-initialize screens to pass down the new language
-      _initScreens();
-    });
+    updateAppLanguage(newLang);
   }
 
-  String _getText(String key) {
+  String _getText(String key, String currentLang) {
     final translations = {
       'en': {
         'home': 'Home',
@@ -90,87 +65,110 @@ class _MainNavigationState extends State<MainNavigation> {
         'profile': 'ప్రొఫైల్',
       },
     };
-    return translations[_selectedLanguage]?[key] ?? translations['en']![key]!;
+    return translations[currentLang]?[key] ?? translations['en']![key]!;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, currentLang, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final navBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+
+        return Scaffold(
+          body: IndexedStack(
+            index: _currentIndex,
             children: [
-              _buildNavItem(0, Icons.home_rounded, _getText('home')),
-              _buildNavItem(1, Icons.camera_alt_rounded, _getText('scan')),
-              _buildNavItem(2, Icons.mic_rounded, _getText('voice')),
-              _buildNavItem(3, Icons.timeline_rounded, _getText('timeline')),
-              _buildNavItem(4, Icons.person_rounded, _getText('profile')),
+              DashboardScreen(
+                language: currentLang,
+                onLanguageChanged: _handleLanguageChanged,
+              ),
+              ScanScreen(language: currentLang),
+              VoiceScreen(language: currentLang),
+              HealthTimelineScreen(language: currentLang),
+              ProfileScreen(language: currentLang),
             ],
           ),
-        ),
-      ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: navBg,
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black.withValues(alpha: 0.3) : const Color(0xFF0F172A).withValues(alpha: 0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Container(
+                height: 68,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, _getText('home', currentLang), isDark),
+                    _buildNavItem(1, Icons.center_focus_strong_rounded, Icons.center_focus_weak_rounded, _getText('scan', currentLang), isDark),
+                    _buildNavItem(2, Icons.mic_rounded, Icons.mic_none_rounded, _getText('voice', currentLang), isDark),
+                    _buildNavItem(3, Icons.timeline_rounded, Icons.timeline_outlined, _getText('timeline', currentLang), isDark),
+                    _buildNavItem(4, Icons.person_rounded, Icons.person_outline_rounded, _getText('profile', currentLang), isDark),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData selectedIcon, IconData unselectedIcon, String label, bool isDark) {
     final isSelected = _currentIndex == index;
+    final activeColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+    final unselectedColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     return GestureDetector(
       onTap: () {
         setState(() {
           _currentIndex = index;
         });
+        if (index == 0) {
+          dashboardRefreshNotifier.value++;
+        }
       },
+      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.teal.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 16 : 12,
+          vertical: 8,
         ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const NeverScrollableScrollPhysics(),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? Colors.teal : Colors.grey,
-              ),
-              AnimatedCrossFade(
-                firstChild: const SizedBox.shrink(),
-                secondChild: Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.teal,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+        decoration: BoxDecoration(
+          color: isSelected ? activeColor.withValues(alpha: isDark ? 0.2 : 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? selectedIcon : unselectedIcon,
+              color: isSelected ? activeColor : unselectedColor,
+              size: 24,
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: activeColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
-                crossFadeState: isSelected
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                duration: const Duration(milliseconds: 300),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );

@@ -10,7 +10,7 @@ from google import genai
 from google.genai import types
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY")
-MODEL_CANDIDATES = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+MODEL_CANDIDATES = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
 
 def extract_json_object(raw_text: str) -> str:
     """
@@ -27,12 +27,21 @@ def extract_json_object(raw_text: str) -> str:
         match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
         if match:
             text = match.group(1).strip()
+        else:
+            text = re.sub(r"```(?:json)?", "", text).strip()
 
     # 2. Extract substring between first '{' and last '}'
     start_idx = text.find("{")
-    end_idx = text.rfind("}")
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        text = text[start_idx : end_idx + 1]
+    if start_idx != -1:
+        end_idx = text.rfind("}")
+        if end_idx != -1 and end_idx > start_idx:
+            text = text[start_idx : end_idx + 1]
+        else:
+            text = text[start_idx:]
+            # Attempt to balance open braces/brackets
+            open_braces = text.count("{") - text.count("}")
+            open_brackets = text.count("[") - text.count("]")
+            text = text + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
 
     # 3. Clean trailing commas before closing braces/brackets
     text = re.sub(r",\s*([\}\]])", r"\1", text)
@@ -43,7 +52,7 @@ def _call_single_model(model: str, contents: list) -> dict:
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
         temperature=0.1,
-        max_output_tokens=1536,
+        max_output_tokens=4096,
     )
     response = client.models.generate_content(
         model=model,
@@ -114,13 +123,20 @@ TASK 1: PRESCRIPTION VALIDATION & AUTHENTICITY CHECK
 Determine if this image/text is a VALID OFFICIAL DOCTOR'S PRESCRIPTION issued by a clinic, hospital, or healthcare practitioner.
 
 CRITICAL RULES:
-- If the image is a self-written list of medicine names, user handwritten note on plain/ruled notebook paper without an official doctor/clinic header, Rx symbol, or doctor credentials, IT IS NOT A VALID PRESCRIPTION.
-- Ignore non-medical objects, selfies, animals, cars, food menus, homework, general notes, or non-prescription bills.
+- If the image is a self-written list of medicine names, user handwritten note on plain/ruled notebook paper without an official doctor/clinic header, Rx symbol, or doctor credentials, IT IS NOT A VALID PRESCRIPTION:
+  Set "is_valid_prescription": false
+  Set "explanation": "This document appears to be a self-written list of medicine names on plain paper and not an official doctor's prescription.\n\nSelf-written medicine notes or lists on plain/ruled paper are not accepted as valid prescriptions.\n\nPlease upload an official prescription issued by a doctor or clinic."
+  Set "medicines": [], "schedule": [], "precautions": []
 
-IF NOT A VALID OFFICIAL PRESCRIPTION (e.g. Self-written notes, general objects):
-Set "is_valid_prescription": false
-Set "explanation": "This document appears to be a self-written list of medicine names on plain paper and not an official doctor's prescription.\n\nSelf-written medicine notes or lists on plain/ruled paper are not accepted as valid prescriptions.\n\nPlease upload an official prescription issued by a doctor or clinic."
-Set "medicines": [], "schedule": [], "precautions": []
+- If the document is a Medical Report / Lab Test (e.g. CBC, blood test, urine test, pathology, MRI, CT, X-ray):
+  Set "is_valid_prescription": false
+  Set "explanation": "This document appears to be a medical lab report rather than a doctor's prescription.\n\nPlease use the Report Analysis section to analyze medical reports."
+  Set "medicines": [], "schedule": [], "precautions": []
+
+- If the image is a non-medical object, selfie, animal, car, food, general photo, or homework:
+  Set "is_valid_prescription": false
+  Set "explanation": "This image doesn't seem to be a prescription.\nTry uploading:\n\n📄 A doctor's prescription\n📸 A clear, well-lit photo\n📑 A single prescription page"
+  Set "medicines": [], "schedule": [], "precautions": []
 
 TASK 2: MEDICINE EXTRACTION & BRIEF ANALYSIS (If valid prescription)
 1. Set "is_valid_prescription": true
@@ -201,10 +217,10 @@ JSON FORMAT:
         
         attempt_start = time.time()
         try:
-            # Enforce 6-second timeout per attempt
+            # Enforce reasonable timeout per attempt
             result_dict = await asyncio.wait_for(
                 asyncio.to_thread(_call_single_model, model, contents),
-                timeout=6.0
+                timeout=15.0
             )
             attempt_dur = time.time() - attempt_start
             raw_text = result_dict.get("raw_text", "")

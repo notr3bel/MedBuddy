@@ -93,6 +93,9 @@
     {"brand": "Valium", "generic": "Diazepam", "category": "Anxiolytic"},
     {"brand": "Duloflex", "generic": "Duloxetine", "category": "Antidepressant"},
     {"brand": "Escitalopram", "generic": "Escitalopram", "category": "Antidepressant"},
-    {"brand": "Nexito", "generic": "Escitalopram", "category": "Antidepressant"}
+    {"brand": "Nexito", "generic": "Escitalopram", "category": "Antidepressant"},
+    {"brand": "Zix", "generic": "Aceclofenac", "category": "NSAID"},
+    {"brand": "Zix-flam", "generic": "Aceclofenac + Paracetamol", "category": "Analgesic/Anti-inflammatory"},
+    {"brand": "Zix-R", "generic": "Aceclofenac + Rabeprazole", "category": "Analgesic/Anti-inflammatory"}
   ]
 }

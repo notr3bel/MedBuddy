@@ -15,8 +15,14 @@ load_dotenv()
 
 router = APIRouter(prefix="/api")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY")
-MODEL = "gemini-2.5-flash"
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY") or "DUMMY_KEY",
+    http_options=types.HttpOptions(
+        timeout=12000,
+        retry_options=types.HttpRetryOptions(attempts=1),
+    ),
+)
+MODEL_CANDIDATES = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
 
 class SymptomRequest(BaseModel):
     symptoms: str
@@ -63,16 +69,24 @@ CRITICAL RULES:
 """
     def _generate() -> str:
         config = types.GenerateContentConfig(
-            max_output_tokens=512,
+            max_output_tokens=1024,
             temperature=0.4,
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
-        response = client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-            config=config,
-        )
-        return response.text if hasattr(response, "text") and response.text else "I am sorry, I couldn't process your request."
+        for model_name in MODEL_CANDIDATES:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=config,
+                )
+                txt = response.text if hasattr(response, "text") and response.text else ""
+                if txt and txt.strip():
+                    return txt.strip()
+            except Exception as ex:
+                if "403" in str(ex) or "PERMISSION_DENIED" in str(ex):
+                    raise
+                continue
+        return "I am sorry, I couldn't process your request."
 
     try:
         ai_response = await asyncio.to_thread(_generate)

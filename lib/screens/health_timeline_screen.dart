@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeline_tile/timeline_tile.dart';
-import 'package:intl/intl.dart';
-import '../services/api_service.dart';
+import '../services/date_formatter.dart';
 
 class HealthTimelineScreen extends StatefulWidget {
   final String language;
@@ -13,12 +12,15 @@ class HealthTimelineScreen extends StatefulWidget {
   State<HealthTimelineScreen> createState() => _HealthTimelineScreenState();
 }
 
-class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
+class _HealthTimelineScreenState extends State<HealthTimelineScreen> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   final supabase = Supabase.instance.client;
   List<dynamic> _history = [];
-  Map<String, dynamic>? _summary;
-  bool _isLoading = true;
+  bool _isLoadingHistory = true;
   String? _error;
+  String _selectedFilter = 'All';
 
   @override
   void initState() {
@@ -34,38 +36,100 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
     }
   }
 
+  List<dynamic> get _filteredHistory {
+    final visibleHistory = _history.where((item) {
+      final type = (item['type'] as String? ?? '').toLowerCase();
+      return type != 'skin';
+    }).toList();
+    if (_selectedFilter == 'All') return visibleHistory;
+    return visibleHistory.where((item) {
+      final type = (item['type'] as String? ?? '').toLowerCase();
+      return type == _selectedFilter.toLowerCase();
+    }).toList();
+  }
+
+  Widget _buildFilterChips(bool isDark) {
+    final filters = ['All', 'Prescription', 'Report', 'Symptom'];
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
+    return Container(
+      height: 44,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        itemBuilder: (context, index) {
+          final filter = filters[index];
+          final isSelected = _selectedFilter == filter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(
+                filter,
+                style: TextStyle(
+                  color: isSelected
+                      ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+                      : (isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A)),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+              selected: isSelected,
+              selectedColor: primaryColor,
+              backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              side: BorderSide(
+                color: isSelected ? primaryColor : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() {
+                    _selectedFilter = filter;
+                  });
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _fetchData() async {
     setState(() {
-      _isLoading = true;
+      _isLoadingHistory = true;
       _error = null;
     });
 
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) {
-        throw Exception("User not logged in");
-      }
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      setState(() {
+        _error = "User not logged in";
+        _isLoadingHistory = false;
+      });
+      return;
+    }
 
-      // Fetch History
+    try {
       final response = await supabase
           .from('analysis_history')
           .select()
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
-      // Fetch AI Summary from backend
-      final summary = await ApiService.getHealthSummary(user.id, lang: widget.language);
-
-      setState(() {
-        _history = response as List<dynamic>;
-        _summary = summary;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _history = response as List<dynamic>;
+          _isLoadingHistory = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoadingHistory = false;
+        });
+      }
     }
   }
 
@@ -73,13 +137,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
     final translations = {
       'en': {
         'title': 'Health Timeline',
-        'summary': 'Health Summary',
         'events': 'Events',
-        'common_issue': 'MOST COMMON ISSUE',
-        'rec': 'RECOMMENDATION',
         'no_events': 'No health events found.',
         'unknown': 'Unknown',
-        'no_rec': 'No suggestion available.',
         'prescription': 'Prescription Analysis',
         'report': 'Medical Report',
         'skin': 'Skin Analysis',
@@ -89,13 +149,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       },
       'hi': {
         'title': 'स्वास्थ्य समयरेखा',
-        'summary': 'स्वास्थ्य सारांश',
         'events': 'घटनाएं',
-        'common_issue': 'सबसे आम समस्या',
-        'rec': 'सिफारिश',
         'no_events': 'कोई स्वास्थ्य घटना नहीं मिली।',
         'unknown': 'अज्ञात',
-        'no_rec': 'कोई सुझाव उपलब्ध नहीं है।',
         'prescription': 'नुस्खा विश्लेषण',
         'report': 'मेडिकल रिपोर्ट',
         'skin': 'त्वचा विश्लेषण',
@@ -105,13 +161,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       },
       'kn': {
         'title': 'ಆರೋಗ್ಯ ಕಾಲಸೂಚಿ',
-        'summary': 'ಆರೋಗ್ಯ ಸಾರಾಂಶ',
         'events': 'ಘಟನೆಗಳು',
-        'common_issue': 'ಅತ್ಯಂತ ಸಾಮಾನ್ಯ ಸಮಸ್ಯೆ',
-        'rec': 'ಶಿಫಾರಸು',
         'no_events': 'ಯಾವುದೇ ಆರೋಗ್ಯ ಘಟನೆಗಳು ಕಂಡುಬಂದಿಲ್ಲ.',
         'unknown': 'ಅಪರಿಚಿತ',
-        'no_rec': 'ಯಾವುದೇ ಸಲಹೆ ಲಭ್ಯವಿಲ್ಲ.',
         'prescription': 'ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್ ವಿಶ್ಲೇಷಣೆ',
         'report': 'ವೈದ್ಯಕೀಯ ವರದಿ',
         'skin': 'ಚರ್ಮದ ವಿಶ್ಲೇಷಣೆ',
@@ -121,13 +173,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       },
       'ta': {
         'title': 'சுகாதார காலவரிசை',
-        'summary': 'சுகாதார சுருக்கம்',
         'events': 'நிகழ்வுகள்',
-        'common_issue': 'மிகவும் பொதுவான பிரச்சனை',
-        'rec': 'பரிந்துரை',
         'no_events': 'சுகாதார நிகழ்வுகள் எதுவும் காணப்படவில்லை.',
         'unknown': 'தெரியவில்லை',
-        'no_rec': 'பரிந்துரை எதுவும் இல்லை.',
         'prescription': 'மருந்துச் சீட்டு பகுப்பாய்வு',
         'report': 'மருத்துவ அறிக்கை',
         'skin': 'தோல் பகுப்பாய்வு',
@@ -137,13 +185,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       },
       'ml': {
         'title': 'ആരോഗ്യ രേഖ',
-        'summary': 'ആരോഗ്യ സംഗ്രഹം',
         'events': 'സംഭവങ്ങൾ',
-        'common_issue': 'ഏറ്റവും സാധാരണമായ പ്രശ്നം',
-        'rec': 'ശുപാർശ',
         'no_events': 'ആരോഗ്യ സംഭവങ്ങൾ ഒന്നും കണ്ടെത്തിയില്ല.',
         'unknown': 'അജ്ഞാതം',
-        'no_rec': 'ശുപാർശകളൊന്നുമില്ല.',
         'prescription': 'കുറിപ്പടി വിശകലനം',
         'report': 'മെഡിക്കൽ റിപ്പോർട്ട്',
         'skin': 'ചർമ്മ വിശകലനം',
@@ -153,13 +197,9 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       },
       'te': {
         'title': 'ఆరోగ్య కాలక్రమం',
-        'summary': 'ఆరోగ్య సారాంశం',
         'events': 'ఘటనలు',
-        'common_issue': 'అత్యంత సాధారణ సమస్య',
-        'rec': 'సిఫార్సు',
         'no_events': 'ఆరోగ్య ఘటనలు ఏవీ కనుగొనబడలేదు.',
         'unknown': 'తెలియదు',
-        'no_rec': 'ఎటువంటి సూచన అందుబాటులో లేదు.',
         'prescription': 'ప్రిస్క్రిప్షన్ విశ్లేషణ',
         'report': 'వైద్య నివేదిక',
         'skin': 'చర్మ విశ్లేషణ',
@@ -174,15 +214,13 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
   IconData _getIconForType(String type) {
     switch (type.toLowerCase()) {
       case 'prescription':
-        return Icons.medical_services;
+        return Icons.medical_services_rounded;
       case 'report':
-        return Icons.assignment;
-      case 'skin':
-        return Icons.healing;
+        return Icons.assignment_rounded;
       case 'symptom':
-        return Icons.chat;
+        return Icons.chat_bubble_rounded;
       default:
-        return Icons.event;
+        return Icons.event_rounded;
     }
   }
 
@@ -192,8 +230,6 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
         return _getText('prescription');
       case 'report':
         return _getText('report');
-      case 'skin':
-        return _getText('skin');
       case 'symptom':
         return _getText('symptom');
       default:
@@ -203,25 +239,40 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
     return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
         title: Text(_getText('title')),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
+        backgroundColor: primaryColor,
+        foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        elevation: 0,
       ),
       body: RefreshIndicator(
+        color: primaryColor,
         onRefresh: _fetchData,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+        child: _isLoadingHistory
+            ? Center(child: CircularProgressIndicator(color: primaryColor))
             : _error != null
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text('Error: $_error', textAlign: TextAlign.center),
+                        Text(
+                          'Error: $_error',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A)),
+                        ),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _fetchData,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+                          ),
                           child: Text(_getText('retry')),
                         ),
                       ],
@@ -229,26 +280,34 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
                   )
                 : CustomScrollView(
                     slivers: [
-                      if (_summary != null)
-                        SliverToBoxAdapter(
-                          child: _buildSummaryCard(),
-                        ),
-                      if (_history.isEmpty)
+                      SliverToBoxAdapter(
+                        child: _buildFilterChips(isDark),
+                      ),
+                      if (_filteredHistory.isEmpty)
                         SliverFillRemaining(
                           child: Center(
-                            child: Text(_getText('no_events')),
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Text(
+                                _getText('no_events'),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                ),
+                              ),
+                            ),
                           ),
                         )
                       else
                         SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
-                              final event = _history[index];
+                              final event = _filteredHistory[index];
                               final isFirst = index == 0;
-                              final isLast = index == _history.length - 1;
-                              return _buildTimelineTile(event, isFirst, isLast);
+                              final isLast = index == _filteredHistory.length - 1;
+                              return _buildTimelineTile(event, isFirst, isLast, isDark, primaryColor);
                             },
-                            childCount: _history.length,
+                            childCount: _filteredHistory.length,
                           ),
                         ),
                     ],
@@ -257,103 +316,12 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
     );
   }
 
-  Widget _buildSummaryCard() {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.teal.shade700, Colors.teal.shade400],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.teal.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
-              const SizedBox(width: 12),
-              Text(
-                _getText('summary'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${_summary!['total_events']} ${_getText('events')}',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text(
-            _getText('common_issue'),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _summary!['most_common_condition'] ?? _getText('unknown'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Divider(color: Colors.white24, height: 24),
-          Text(
-            _getText('rec'),
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _summary!['suggestion'] ?? _getText('no_rec'),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineTile(dynamic event, bool isFirst, bool isLast) {
-    final DateTime createdAt = DateTime.parse(event['created_at']).toLocal();
-    final String dateStr = DateFormat('MMM dd, yyyy').format(createdAt);
-    final String timeStr = DateFormat('hh:mm a').format(createdAt);
-    final String type = event['type'];
-    final String result = event['result'];
+  Widget _buildTimelineTile(dynamic event, bool isFirst, bool isLast, bool isDark, Color primaryColor) {
+    final String rawDateStr = event['created_at'] ?? '';
+    final String dateStr = DateFormatter.formatISTDate(rawDateStr);
+    final String timeStr = DateFormatter.formatISTTime(rawDateStr);
+    final String type = event['type'] ?? 'event';
+    final String result = event['result'] ?? '';
 
     return TimelineTile(
       alignment: TimelineAlign.manual,
@@ -365,23 +333,23 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
         height: 40,
         indicator: Container(
           decoration: BoxDecoration(
-            color: Colors.teal.shade50,
+            color: primaryColor.withValues(alpha: 0.15),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.teal, width: 2),
+            border: Border.all(color: primaryColor, width: 2),
           ),
           child: Icon(
             _getIconForType(type),
-            color: Colors.teal,
+            color: primaryColor,
             size: 20,
           ),
         ),
       ),
       beforeLineStyle: LineStyle(
-        color: Colors.teal.withValues(alpha: 0.5),
+        color: primaryColor.withValues(alpha: 0.4),
         thickness: 2,
       ),
       afterLineStyle: LineStyle(
-        color: Colors.teal.withValues(alpha: 0.5),
+        color: primaryColor.withValues(alpha: 0.4),
         thickness: 2,
       ),
       startChild: Container(
@@ -393,10 +361,10 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
           children: [
             Text(
               dateStr,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 11,
-                color: Colors.black87,
+                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                 height: 1.1,
               ),
               maxLines: 1,
@@ -406,7 +374,7 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
               timeStr,
               style: TextStyle(
                 fontSize: 9,
-                color: Colors.grey.shade600,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 height: 1.1,
               ),
               maxLines: 1,
@@ -417,14 +385,14 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       ),
       endChild: Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        child: _buildEventCard(type, result),
+        child: _buildEventCard(type, result, isDark, primaryColor),
       ),
     );
   }
 
-  Widget _buildEventCard(String type, String result) {
+  Widget _buildEventCard(String type, String result, bool isDark, Color primaryColor) {
     String displayResult = result;
-    if (type == 'report' && result.startsWith('{')) {
+    if (type.toLowerCase() == 'report' && result.startsWith('{')) {
       try {
         final decoded = Map<String, dynamic>.from(jsonDecode(result));
         displayResult = decoded['summary'] ?? result;
@@ -433,35 +401,76 @@ class _HealthTimelineScreenState extends State<HealthTimelineScreen> {
       }
     }
 
-    return Card(
-      elevation: 2,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+    String preview = displayResult.replaceAll(RegExp(r'[#*`_>-\\]'), ' ');
+    preview = preview.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : const Color(0xFF0F172A).withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        data: Theme.of(context).copyWith(
+          dividerColor: Colors.transparent,
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                onSurface: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+              ),
+        ),
         child: ExpansionTile(
           dense: true,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           visualDensity: VisualDensity.compact,
-          leading: Icon(_getIconForType(type), color: Colors.teal, size: 20),
+          iconColor: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          collapsedIconColor: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          leading: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: primaryColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_getIconForType(type), color: primaryColor, size: 18),
+          ),
           title: Text(
             _getTitleForType(type),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.1),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+              height: 1.1,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Text(
-            displayResult.split('\n').first.trim(),
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.1),
+            preview,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+              height: 1.1,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               child: Text(
                 displayResult,
-                style: const TextStyle(fontSize: 13, height: 1.4),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155),
+                  height: 1.4,
+                ),
               ),
             ),
           ],

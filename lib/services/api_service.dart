@@ -95,14 +95,19 @@ class ApiService {
   }
 
   static Future<String> queryAssistant(String query,
-      {String lang = "en"}) async {
+      {String lang = "en", String? userId}) async {
+    final Map<String, String> body = {
+      'query': query,
+      'lang': lang,
+    };
+    if (userId != null && userId.isNotEmpty) {
+      body['user_id'] = userId;
+    }
+
     final response = await http.post(
       Uri.parse("$baseUrl/chat"),
       headers: {'ngrok-skip-browser-warning': 'true'},
-      body: {
-        'query': query,
-        'lang': lang,
-      },
+      body: body,
     );
 
     if (response.statusCode == 200) {

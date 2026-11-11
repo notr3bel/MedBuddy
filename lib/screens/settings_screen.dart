@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import 'profile_screen.dart';
-
 import 'privacy_security_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,11 +15,14 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late String _selectedLanguage;
   bool _notificationsEnabled = true;
+  late bool _darkModeEnabled;
+  bool _reminderAlertsEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _selectedLanguage = widget.currentLanguage;
+    _darkModeEnabled = themeNotifier.value == ThemeMode.dark;
   }
 
   String _getText(String key) {
@@ -33,8 +36,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'Password, data and account security',
         'preferences': 'Preferences',
         'language': 'Language',
+        'dark_mode': 'Dark Mode',
+        'dark_mode_sub': 'Switch app theme to dark mode',
         'notifications': 'Notifications',
         'notif_sub': 'Stay updated with alerts',
+        'med_reminders': 'Medication Reminders',
+        'med_reminders_sub': 'Push alerts & sound notifications for medicine doses',
         'support': 'Support',
         'help': 'Help Center',
         'help_sub': 'FAQs and support guides',
@@ -51,8 +58,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'पासवर्ड, डेटा और खाता सुरक्षा',
         'preferences': 'वरीयताएँ',
         'language': 'भाषा',
+        'dark_mode': 'डार्क मोड',
+        'dark_mode_sub': 'ऐप थीम को डार्क मोड में बदलें',
         'notifications': 'सूचनाएं',
         'notif_sub': 'अलर्ट के साथ अपडेट रहें',
+        'med_reminders': 'दवा अनुस्मारक',
+        'med_reminders_sub': 'दवा की खुराक के लिए पुश अलर्ट और ध्वनि सूचनाएं',
         'support': 'सहायता',
         'help': 'सहायता केंद्र',
         'help_sub': 'अक्सर पूछे जाने वाले प्रश्न और मार्गदर्शिकाएँ',
@@ -69,8 +80,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'ಪಾಸ್‌ವರ್ಡ್, ಡೇಟಾ ಮತ್ತು ಖಾತೆ ಭದ್ರತೆ',
         'preferences': 'ಆದ್ಯತೆಗಳು',
         'language': 'ಭಾಷೆ',
+        'dark_mode': 'ಡಾರ್ಕ್ ಮೋಡ್',
+        'dark_mode_sub': 'ಆ್ಯಪ್ ಥೀಮ್ ಅನ್ನು ಡಾರ್ಕ್ ಮೋಡ್‌ಗೆ ಬದಲಾಯಿಸಿ',
         'notifications': 'ಅಧಿಸೂಚನೆಗಳು',
         'notif_sub': 'ಎಚ್ಚರಿಕೆಗಳೊಂದಿಗೆ ನವೀಕೃತವಾಗಿರಿ',
+        'med_reminders': 'ಔಷಧಿ ಜ್ಞಾಪನೆಗಳು',
+        'med_reminders_sub': 'ಔಷಧಿ ಡೋಸ್‌ಗಳಿಗೆ ಪುಶ್ ಅಲರ್ಟ್‌ಗಳು ಮತ್ತು ಧ್ವನಿ ಅಧಿಸೂಚನೆಗಳು',
         'support': 'ಬೆಂಬಲ',
         'help': 'ಸಹಾಯ ಕೇಂದ್ರ',
         'help_sub': 'FAQ ಗಳು ಮತ್ತು ಬೆಂಬಲ ಮಾರ್ಗದರ್ಶಿಗಳು',
@@ -87,8 +102,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'கடவுச்சொல், தரவு மற்றும் கணக்கு பாதுகாப்பு',
         'preferences': 'விருப்பத்தேர்வுகள்',
         'language': 'மொழி',
+        'dark_mode': 'இருண்ட பயன்முறை',
+        'dark_mode_sub': 'செயலி தீமை இருண்ட பயன்முறைக்கு மாற்றவும்',
         'notifications': 'அறிவிப்புகள்',
         'notif_sub': 'விழிப்பூட்டல்களுடன் புதுப்பித்த நிலையில் இருக்கவும்',
+        'med_reminders': 'மருந்து நினைவூட்டல்கள்',
+        'med_reminders_sub': 'மருந்து நேரங்களுக்கான எச்சரிக்கை மற்றும் ஒலி அறிவிப்புகள்',
         'support': 'ஆதரவு',
         'help': 'உதவி மையம்',
         'help_sub': 'அடிக்கடி கேட்கப்படும் கேள்விகள் மற்றும் வழிகாட்டிகள்',
@@ -105,8 +124,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'പാസ്‌വേഡ്, ഡാറ്റ, അക്കൗണ്ട് സുരക്ഷ',
         'preferences': 'മുൻഗണനകൾ',
         'language': 'ഭാഷ',
+        'dark_mode': 'ഡാർക്ക് മോഡ്',
+        'dark_mode_sub': 'ആപ്പ് തീം ഡാർക്ക് മോഡിലേക്ക് മാറ്റുക',
         'notifications': 'അറിയിപ്പുകൾ',
         'notif_sub': 'അലേർട്ടുകൾക്കൊപ്പം അപ്‌ഡേറ്റ് ആയിരിക്കുക',
+        'med_reminders': 'മരുന്ന് ഓർമ്മപ്പെടുത്തലുകൾ',
+        'med_reminders_sub': 'മരുന്ന് ഡോസുകൾക്കുള്ള പുഷ് അലേർട്ടുകളും ശബ്ദ അറിയിപ്പുകളും',
         'support': 'പിന്തുണ',
         'help': 'സഹായ കേന്ദ്രം',
         'help_sub': 'പതിവുചോദ്യങ്ങളും പിന്തുണ ഗൈഡുകളും',
@@ -123,8 +146,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'privacy_sub': 'పాస్‌వర్డ్, డేటా మరియు ఖాతా భద్రత',
         'preferences': 'ప్రాధాన్యతలు',
         'language': 'భాష',
+        'dark_mode': 'డార్క్ మోడ్',
+        'dark_mode_sub': 'యాప్ థీమ్‌ను డార్క్ మోడ్‌కి మార్చండి',
         'notifications': 'నోటిఫికేషన్లు',
         'notif_sub': 'అలర్ట్‌లతో అప్‌డేట్‌గా ఉండండి',
+        'med_reminders': 'మందుల రిమైండర్లు',
+        'med_reminders_sub': 'మందుల మోతాదుల కోసం పుష్ అలర్ట్‌లు మరియు శబ్ద నోటిఫికేషన్‌లు',
         'support': 'మద్దతు',
         'help': 'సహాయ కేంద్రం',
         'help_sub': 'తరచుగా అడిగే ప్రశ్నలు మరియు మద్దతు గైడ్‌లు',
@@ -138,15 +165,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
-        title: Text(_getText('title'), 
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(
+          _getText('title'),
+          style: TextStyle(
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          ),
           onPressed: () => Navigator.pop(context, _selectedLanguage),
         ),
       ),
@@ -156,12 +194,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 10),
-            _buildSectionHeader(_getText('account')),
+            _buildSectionHeader(_getText('account'), isDark),
             const SizedBox(height: 12),
             _buildSettingsCard(
+              isDark: isDark,
               children: [
                 _buildSettingsTile(
-                  icon: Icons.person_outline,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.person_outline_rounded,
                   title: _getText('profile'),
                   subtitle: _getText('profile_sub'),
                   onTap: () {
@@ -173,8 +214,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
-                _buildDivider(),
+                _buildDivider(isDark),
                 _buildSettingsTile(
+                  isDark: isDark,
+                  primaryColor: primaryColor,
                   icon: Icons.privacy_tip_outlined,
                   title: _getText('privacy'),
                   subtitle: _getText('privacy_sub'),
@@ -188,43 +231,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
             const SizedBox(height: 25),
-            _buildSectionHeader(_getText('preferences')),
+            _buildSectionHeader(_getText('preferences'), isDark),
             const SizedBox(height: 12),
             _buildSettingsCard(
+              isDark: isDark,
               children: [
                 _buildSettingsTile(
-                  icon: Icons.language_outlined,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.language_rounded,
                   title: _getText('language'),
                   subtitle: _getLanguageName(_selectedLanguage),
-                  trailing: _buildLanguageDropdown(),
+                  trailing: _buildLanguageDropdown(isDark),
                 ),
-                _buildDivider(),
+                _buildDivider(isDark),
                 _buildSettingsTile(
-                  icon: Icons.notifications_none_outlined,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.dark_mode_outlined,
+                  title: _getText('dark_mode'),
+                  subtitle: _getText('dark_mode_sub'),
+                  trailing: Switch(
+                    value: _darkModeEnabled,
+                    onChanged: (val) {
+                      setState(() {
+                        _darkModeEnabled = val;
+                        updateAppTheme(val ? ThemeMode.dark : ThemeMode.light);
+                      });
+                    },
+                    activeThumbColor: primaryColor,
+                  ),
+                ),
+                _buildDivider(isDark),
+                _buildSettingsTile(
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.notifications_none_rounded,
                   title: _getText('notifications'),
                   subtitle: _getText('notif_sub'),
                   trailing: Switch(
                     value: _notificationsEnabled,
                     onChanged: (val) => setState(() => _notificationsEnabled = val),
-                    activeThumbColor: Colors.teal,
+                    activeThumbColor: primaryColor,
+                  ),
+                ),
+                _buildDivider(isDark),
+                _buildSettingsTile(
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.alarm_on_rounded,
+                  title: _getText('med_reminders'),
+                  subtitle: _getText('med_reminders_sub'),
+                  trailing: Switch(
+                    value: _reminderAlertsEnabled,
+                    onChanged: (val) => setState(() => _reminderAlertsEnabled = val),
+                    activeThumbColor: primaryColor,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 25),
-            _buildSectionHeader(_getText('support')),
+            _buildSectionHeader(_getText('support'), isDark),
             const SizedBox(height: 12),
             _buildSettingsCard(
+              isDark: isDark,
               children: [
                 _buildSettingsTile(
-                  icon: Icons.help_outline,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.help_outline_rounded,
                   title: _getText('help'),
                   subtitle: _getText('help_sub'),
-                  onTap: () {},
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Help Center & FAQs opened.")),
+                    );
+                  },
                 ),
-                _buildDivider(),
+                _buildDivider(isDark),
                 _buildSettingsTile(
-                  icon: Icons.info_outline,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
+                  icon: Icons.info_outline_rounded,
                   title: _getText('about'),
                   subtitle: _getText('version'),
                   onTap: () {
@@ -232,7 +320,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       context: context,
                       applicationName: 'MedIntel',
                       applicationVersion: '1.0.0',
-                      applicationIcon: const Icon(Icons.local_hospital, size: 40, color: Colors.teal),
+                      applicationIcon: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.asset('assets/images/logo.png', width: 44, height: 44, fit: BoxFit.cover),
+                      ),
                       children: [Text(_getText('desc'))],
                     );
                   },
@@ -246,7 +337,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(left: 8),
       child: Text(
@@ -254,21 +345,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.bold,
-          color: Colors.grey.shade500,
+          color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
           letterSpacing: 1.1,
         ),
       ),
     );
   }
 
-  Widget _buildSettingsCard({required List<Widget> children}) {
+  Widget _buildSettingsCard({required List<Widget> children, required bool isDark}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -282,6 +376,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required IconData icon,
     required String title,
     required String subtitle,
+    required bool isDark,
+    required Color primaryColor,
     Widget? trailing,
     VoidCallback? onTap,
   }) {
@@ -290,36 +386,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.teal.withValues(alpha: 0.08),
+          color: primaryColor.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: Colors.teal, size: 22),
+        child: Icon(icon, color: primaryColor, size: 22),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-      subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-      trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 15,
+          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          fontSize: 13,
+        ),
+      ),
+      trailing: trailing ?? Icon(Icons.arrow_forward_ios, size: 12, color: isDark ? const Color(0xFF94A3B8) : Colors.grey),
       onTap: onTap,
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(height: 1, indent: 70, endIndent: 20, color: Colors.grey.shade100);
+  Widget _buildDivider(bool isDark) {
+    return Divider(
+      height: 1,
+      indent: 70,
+      endIndent: 20,
+      color: isDark ? const Color(0xFF334155) : Colors.grey.shade100,
+    );
   }
 
-  Widget _buildLanguageDropdown() {
+  Widget _buildLanguageDropdown(bool isDark) {
     return DropdownButton<String>(
       value: _selectedLanguage,
       underline: const SizedBox(),
-      icon: const Icon(Icons.keyboard_arrow_down, size: 18),
-      items: const [
-        DropdownMenuItem(value: "en", child: Text("EN")),
-        DropdownMenuItem(value: "hi", child: Text("HI")),
-        DropdownMenuItem(value: "kn", child: Text("KN")),
-        DropdownMenuItem(value: "ta", child: Text("TA")),
-        DropdownMenuItem(value: "ml", child: Text("ML")),
-        DropdownMenuItem(value: "te", child: Text("TE")),
+      dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      icon: Icon(
+        Icons.keyboard_arrow_down,
+        size: 18,
+        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+      ),
+      items: [
+        for (var code in ["en", "hi", "kn", "ta", "ml", "te"])
+          DropdownMenuItem(
+            value: code,
+            child: Text(
+              code.toUpperCase(),
+              style: TextStyle(
+                color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+              ),
+            ),
+          ),
       ],
-      onChanged: (val) { if (val != null) setState(() => _selectedLanguage = val); },
+      onChanged: (val) {
+        if (val != null) {
+          setState(() => _selectedLanguage = val);
+          updateAppLanguage(val);
+        }
+      },
     );
   }
 

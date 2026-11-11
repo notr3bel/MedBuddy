@@ -8,7 +8,6 @@ from typing import Optional
 from app.services.input_validator import validate_input_file
 from app.services.quality_analyzer import analyze_image_quality
 from app.services.file_converter import prepare_input_for_analysis
-from app.services.document_classifier import classify_document_and_safety
 from app.services.ocr import extract_text_from_image
 from app.services.trocr_service import predict_medicine_name
 from app.services.ocr_fusion import merge_ocr_results
@@ -68,21 +67,16 @@ async def analyze_prescription(
     image_bytes = prepared["image_bytes"]
     pdf_native_text = prepared["pdf_native_text"]
 
-    # 2. High-Speed Parallel Pre-Analysis Pipeline (Classification + Azure OCR + TrOCR)
-    doc_class_task = asyncio.create_task(classify_document_and_safety(image_bytes, target_endpoint="prescription"))
+    # 2. High-Speed Parallel Pre-Analysis Pipeline (Azure OCR + TrOCR)
     azure_task = asyncio.create_task(extract_text_from_image(image_bytes))
     trocr_task = asyncio.create_task(asyncio.to_thread(predict_medicine_name, image_bytes))
 
     try:
-        doc_class, extracted_text, trocr_prediction = await asyncio.gather(
-            doc_class_task, azure_task, trocr_task
+        extracted_text, trocr_prediction = await asyncio.gather(
+            azure_task, trocr_task
         )
     except Exception as gather_err:
-        logging.warning(f"Parallel gathering warning: {gather_err}")
-        try:
-            doc_class = await doc_class_task
-        except Exception:
-            doc_class = {"is_medical": True, "doc_type": "Prescription"}
+        logging.warning(f"Parallel OCR gathering warning: {gather_err}")
         try:
             extracted_text = await azure_task
         except Exception:
@@ -91,21 +85,6 @@ async def analyze_prescription(
             trocr_prediction = await trocr_task
         except Exception:
             trocr_prediction = ""
-
-    # Document Classification Rejection Check
-    if not doc_class.get("is_medical", True) or doc_class.get("doc_type") in ["Self-Written Notes", "Non-Medical", "Random Document"]:
-        rej_msg = doc_class.get("rejection_message") or PRESCRIPTION_REJECTION_MSG
-        print("\nReason for rejection:\n-------------------\n" + str(rej_msg) + "\n-------------------\n")
-        log_audit_event("prescription_rejected", time.time() - total_start, status="REJECTED_NON_MEDICAL", warnings=[f"doc_type: {doc_class.get('doc_type')}"])
-        return {
-            "success": True,
-            "is_valid_prescription": False,
-            "extracted_text": "",
-            "detected_medicines": [],
-            "schedule": [],
-            "explanation": rej_msg,
-            "precautions": []
-        }
 
     azure_sec = time.time() - total_start
     trocr_sec = 0.0
@@ -151,7 +130,7 @@ async def analyze_prescription(
     print("-------------------\n")
 
     # 4. Cache lookup & Gemini Multimodal Analysis (Rule #6)
-    ocr_hash = generate_ocr_hash(sanitized_merged_text or str(len(image_bytes)))
+    ocr_hash = generate_ocr_hash(f"{lang}::{sanitized_merged_text or str(len(image_bytes))}")
     cached_data = await get_cached_prescription(ocr_hash)
 
     gemini_sec = 0.0
@@ -216,7 +195,8 @@ async def analyze_prescription(
             if isinstance(item, dict) and item.get("medicine"):
                 detected_meds.append(str(item["medicine"]))
 
-    is_valid = bool(detected_meds or (isinstance(raw_schedule, list) and raw_schedule) or medicine_lines)
+    gemini_is_valid = final_result.get("is_valid_prescription", True) if isinstance(final_result, dict) else True
+    is_valid = gemini_is_valid and bool(detected_meds or (isinstance(raw_schedule, list) and raw_schedule) or medicine_lines)
 
     # Build OCR-derived fallback medicines & schedule if Gemini returned empty results or fallback was activated
     fb_meds, fb_schedule, fb_explanation = build_ocr_fallback_schedule(medicine_lines or cleaned_ocr_text or sanitized_merged_text)
@@ -234,16 +214,17 @@ async def analyze_prescription(
 
         print(f"Reason for acceptance:\n-------------------\nPrescription accepted with {len(detected_meds)} medicine(s).\n-------------------\n")
     else:
-        explanation_text = PRESCRIPTION_REJECTION_MSG
+        explanation_text = str(final_result.get("explanation", "")) if (isinstance(final_result, dict) and not gemini_is_valid) else PRESCRIPTION_REJECTION_MSG
         is_valid = False
-        print("Reason for rejection:\n-------------------\nNo readable medicine lines or schedule identified.\n-------------------\n")
+        print("Reason for rejection:\n-------------------\n" + explanation_text + "\n-------------------\n")
 
     # Save to user history in Supabase & auto-save reminder schedules for immediate dashboard loading
     if is_valid:
-        if user_id and explanation_text:
-            await save_analysis_history(user_id, "prescription", explanation_text)
+        user_id_clean = user_id if isinstance(user_id, str) and user_id.strip() else None
+        if user_id_clean and explanation_text:
+            await save_analysis_history(user_id_clean, "prescription", explanation_text)
         
-        target_uid = user_id or "default"
+        target_uid = user_id_clean or "default"
         save_sched = final_result.get("schedule") if isinstance(final_result, dict) else None
         if isinstance(save_sched, list) and save_sched:
             await save_user_reminder_schedule(target_uid, save_sched)

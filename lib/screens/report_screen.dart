@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../services/api_service.dart';
 import '../services/export_service.dart';
+import '../main.dart';
 
 class ReportScreen extends StatefulWidget {
   static const String routeName = '/reports';
@@ -21,15 +24,23 @@ class _ReportScreenState extends State<ReportScreen> {
   File? selectedReport;
   String? summary;
   final ImagePicker _picker = ImagePicker();
+  @override
+  void didUpdateWidget(covariant ReportScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.language != widget.language) {
+      setState(() {});
+    }
+  }
 
   String _getText(String key) {
     final translations = {
       'en': {
         'title': 'Medical Reports',
         'upload': 'Upload Lab Report',
-        'upload_sub': 'Select an image of your test results',
+        'upload_sub': 'Select an image or PDF of your test results',
         'gallery': 'Gallery',
         'camera': 'Camera',
+        'upload_pdf': 'Upload PDF',
         'analyze': 'Analyze with AI',
         'analyzing': 'AI is processing your report...',
         'results': 'Analysis Results',
@@ -41,9 +52,10 @@ class _ReportScreenState extends State<ReportScreen> {
       'hi': {
         'title': 'मेडिकल रिपोर्ट',
         'upload': 'लैब रिपोर्ट अपलोड करें',
-        'upload_sub': 'अपने परीक्षण परिणामों की एक छवि चुनें',
+        'upload_sub': 'अपने परीक्षण परिणामों की छवि या PDF चुनें',
         'gallery': 'गैलरी',
         'camera': 'कैमरा',
+        'upload_pdf': 'PDF अपलोड करें',
         'analyze': 'AI के साथ विश्लेषण करें',
         'analyzing': 'AI आपकी रिपोर्ट को प्रोसेस कर रहा है...',
         'results': 'विश्लेषण परिणाम',
@@ -55,9 +67,10 @@ class _ReportScreenState extends State<ReportScreen> {
       'kn': {
         'title': 'ವೈದ್ಯಕೀಯ ವರದಿಗಳು',
         'upload': 'ಲ್ಯಾಬ್ ವರದಿಯನ್ನು ಅಪ್‌ಲೋಡ್ ಮಾಡಿ',
-        'upload_sub': 'ನಿಮ್ಮ ಪರೀಕ್ಷಾ ಫಲಿತಾಂಶಗಳ ಚಿತ್ರವನ್ನು ಆಯ್ಕೆಮಾಡಿ',
+        'upload_sub': 'ನಿಮ್ಮ ಪರೀಕ್ಷಾ ಫಲಿತಾಂಶಗಳ ಚಿತ್ರ ಅಥವಾ PDF ಆಯ್ಕೆಮಾಡಿ',
         'gallery': 'ಗ್ಯಾಲರಿ',
         'camera': 'ಕ್ಯಾಮರಾ',
+        'upload_pdf': 'PDF ಅಪ್‌ಲೋಡ್ ಮಾಡಿ',
         'analyze': 'AI ನೊಂದಿಗೆ ವಿಶ್ಲೇಷಿಸಿ',
         'analyzing': 'AI ನಿಮ್ಮ ವರದಿಯನ್ನು ಪ್ರಕ್ರಿಯೆಗೊಳಿಸುತ್ತಿದೆ...',
         'results': 'ವಿಶ್ಲೇಷಣೆ ಫಲಿತಾಂಶಗಳು',
@@ -69,9 +82,10 @@ class _ReportScreenState extends State<ReportScreen> {
       'ta': {
         'title': 'மருத்துவ அறிக்கைகள்',
         'upload': 'ஆய்வக அறிக்கையைப் பதிவேற்றவும்',
-        'upload_sub': 'உங்கள் சோதனை முடிவுகளின் படத்தைத் தேர்ந்தெடுக்கவும்',
+        'upload_sub': 'உங்கள் சோதனை முடிவுகளின் படம் அல்லது PDF-ஐத் தேர்ந்தெடுக்கவும்',
         'gallery': 'கேலரி',
         'camera': 'கேமரா',
+        'upload_pdf': 'PDF பதிவேற்றவும்',
         'analyze': 'AI உடன் பகுப்பாய்வு செய்க',
         'analyzing': 'AI உங்கள் அறிக்கையைச் செயலாக்குகிறது...',
         'results': 'பகுப்பாய்வு முடிவுகள்',
@@ -83,9 +97,10 @@ class _ReportScreenState extends State<ReportScreen> {
       'ml': {
         'title': 'മെഡിക്കൽ റിപ്പോർട്ടുകൾ',
         'upload': 'ലാബ് റിപ്പോർട്ട് അപ്‌ലോഡ് ചെയ്യുക',
-        'upload_sub': 'നിങ്ങളുടെ പരിശോധനാ ഫലങ്ങളുടെ ഒരു ചിത്രം തിരഞ്ഞെടുക്കുക',
+        'upload_sub': 'നിങ്ങളുടെ പരിശോധനാ ഫലങ്ങളുടെ ചിത്രമോ PDF-ഓ തിരഞ്ഞെടുക്കുക',
         'gallery': 'ഗാലറി',
         'camera': 'ക്യാമറ',
+        'upload_pdf': 'PDF അപ്‌ലോഡ് ചെയ്യുക',
         'analyze': 'AI ഉപയോഗിച്ച് വിശകലനം ചെയ്യുക',
         'analyzing': 'AI നിങ്ങളുടെ റിപ്പോർട്ട് പ്രോസസ്സ് ചെയ്യുന്നു...',
         'results': 'വിശകലന ഫലങ്ങൾ',
@@ -97,10 +112,11 @@ class _ReportScreenState extends State<ReportScreen> {
       'te': {
         'title': 'వైద్య నివేదికలు',
         'upload': 'ల్యాబ్ నివేదికను అప్‌లోడ్ చేయండి',
-        'upload_sub': 'మీ పరీక్షా ఫలితాల చిత్రాన్ని ఎంచుకోండి',
+        'upload_sub': 'మీ పరీక్ష ఫలితాల చిత్రం లేదా PDF ఎంచుకోండి',
         'gallery': 'గ్యాలరీ',
         'camera': 'కెమెరా',
-        'analyze': 'AIతో విశ్లేషించండి',
+        'upload_pdf': 'PDF అప్‌లోడ్ చేయండి',
+        'analyze': 'AI తో విశ్లేషించండి',
         'analyzing': 'AI మీ నివేదికను ప్రాసెస్ చేస్తోంది...',
         'results': 'విశ్లేషణ ఫలితాలు',
         'share': 'షేర్ చేయండి',
@@ -116,8 +132,11 @@ class _ReportScreenState extends State<ReportScreen> {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final localFile = await File(pickedFile.path).copy('${appDir.path}/${pickedFile.name}');
+
       setState(() {
-        selectedReport = File(pickedFile.path);
+        selectedReport = localFile;
         summary = null;
       });
     }
@@ -127,10 +146,49 @@ class _ReportScreenState extends State<ReportScreen> {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.camera);
     if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final localFile = await File(pickedFile.path).copy('${appDir.path}/${pickedFile.name}');
+
       setState(() {
-        selectedReport = File(pickedFile.path);
+        selectedReport = localFile;
         summary = null;
       });
+    }
+  }
+
+  Future<void> _pickPdf() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.single;
+        final appDir = await getApplicationDocumentsDirectory();
+        final targetName = file.name.isNotEmpty ? file.name : 'report.pdf';
+        File? localFile;
+
+        if (file.path != null && file.path!.isNotEmpty) {
+          localFile = await File(file.path!).copy('${appDir.path}/$targetName');
+        } else if (file.bytes != null) {
+          localFile = await File('${appDir.path}/$targetName').writeAsBytes(file.bytes!);
+        }
+
+        if (localFile != null && mounted) {
+          setState(() {
+            selectedReport = localFile;
+            summary = null;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error picking PDF: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Could not open PDF picker: $e")),
+        );
+      }
     }
   }
 
@@ -139,23 +197,21 @@ class _ReportScreenState extends State<ReportScreen> {
 
     setState(() {
       isAnalyzing = true;
+      summary = null;
     });
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      Map<String, dynamic> result = await ApiService.analyzeMedicalReport(
+      final result = await ApiService.analyzeMedicalReport(
         selectedReport!,
         lang: widget.language,
         userId: user?.id,
       );
 
       setState(() {
-        if (result['success'] == true) {
-          summary = result['summary'];
-        } else {
-          summary = result['message'] ?? _getText('failed');
-        }
+        summary = result["summary"] ?? result["message"] ?? _getText('failed');
       });
+      dashboardRefreshNotifier.value++;
     } catch (e) {
       setState(() {
         summary = "${_getText('error')}: $e";
@@ -169,15 +225,26 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
-        title: Text(_getText('title'), 
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(
+          _getText('title'),
+          style: TextStyle(
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -186,10 +253,10 @@ class _ReportScreenState extends State<ReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildUploadCard(),
+            _buildUploadCard(isDark, primaryColor),
             const SizedBox(height: 25),
-            if (isAnalyzing) _buildLoadingState(),
-            if (summary != null && !isAnalyzing) _buildResultsCard(),
+            if (isAnalyzing) _buildLoadingState(isDark, primaryColor),
+            if (summary != null && !isAnalyzing) _buildResultsCard(isDark, primaryColor),
             const SizedBox(height: 30),
           ],
         ),
@@ -197,16 +264,17 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildUploadCard() {
+  Widget _buildUploadCard(bool isDark, Color primaryColor) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -219,12 +287,53 @@ class _ReportScreenState extends State<ReportScreen> {
               borderRadius: BorderRadius.circular(16),
               child: Stack(
                 children: [
-                  Image.file(
-                    selectedReport!,
-                    height: 250,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  if (selectedReport!.path.toLowerCase().endsWith('.pdf'))
+                    Container(
+                      height: 180,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: isDark ? 0.12 : 0.06),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: primaryColor.withValues(alpha: isDark ? 0.35 : 0.25),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.picture_as_pdf_rounded, size: 52, color: primaryColor),
+                          const SizedBox(height: 12),
+                          Text(
+                            selectedReport!.path.split(Platform.pathSeparator).last,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "PDF Report Ready for AI Analysis",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Image.file(
+                      selectedReport!,
+                      height: 250,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   Positioned(
                     right: 8,
                     top: 8,
@@ -251,20 +360,34 @@ class _ReportScreenState extends State<ReportScreen> {
               height: 200,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.teal.withValues(alpha: 0.03),
+                color: primaryColor.withValues(alpha: isDark ? 0.1 : 0.04),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.teal.withValues(alpha: 0.1), width: 2),
+                border: Border.all(
+                  color: primaryColor.withValues(alpha: isDark ? 0.3 : 0.15),
+                  width: 2,
+                ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.cloud_upload_outlined, size: 50, color: Colors.teal.shade300),
+                  Icon(Icons.assignment_outlined, size: 50, color: primaryColor),
                   const SizedBox(height: 12),
-                  Text(_getText('upload'), 
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                  Text(
+                    _getText('upload'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(_getText('upload_sub'), 
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  Text(
+                    _getText('upload_sub'),
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -277,6 +400,8 @@ class _ReportScreenState extends State<ReportScreen> {
                   icon: Icons.photo_library_outlined,
                   label: _getText('gallery'),
                   isPrimary: false,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
                 ),
               ),
               const SizedBox(width: 12),
@@ -286,9 +411,21 @@ class _ReportScreenState extends State<ReportScreen> {
                   icon: Icons.camera_alt_outlined,
                   label: _getText('camera'),
                   isPrimary: false,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _buildActionButton(
+            onPressed: _pickPdf,
+            icon: Icons.picture_as_pdf_outlined,
+            label: _getText('upload_pdf'),
+            isPrimary: false,
+            fullWidth: true,
+            isDark: isDark,
+            primaryColor: primaryColor,
           ),
           const SizedBox(height: 12),
           _buildActionButton(
@@ -297,6 +434,8 @@ class _ReportScreenState extends State<ReportScreen> {
             label: _getText('analyze'),
             isPrimary: true,
             fullWidth: true,
+            isDark: isDark,
+            primaryColor: primaryColor,
           ),
         ],
       ),
@@ -308,20 +447,31 @@ class _ReportScreenState extends State<ReportScreen> {
     required IconData icon,
     required String label,
     required bool isPrimary,
+    required bool isDark,
+    required Color primaryColor,
     bool fullWidth = false,
   }) {
+    final bgColor = isPrimary
+        ? primaryColor
+        : (isDark ? const Color(0xFF0F172A) : Colors.white);
+    final fgColor = isPrimary
+        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+        : primaryColor;
+
     return SizedBox(
       width: fullWidth ? double.infinity : null,
       height: 52,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? Colors.teal : Colors.white,
-          foregroundColor: isPrimary ? Colors.white : Colors.teal,
+          backgroundColor: bgColor,
+          foregroundColor: fgColor,
           elevation: isPrimary ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: isPrimary ? BorderSide.none : BorderSide(color: Colors.teal.shade100),
+            side: isPrimary
+                ? BorderSide.none
+                : BorderSide(color: isDark ? const Color(0xFF334155) : primaryColor.withValues(alpha: 0.3)),
           ),
         ),
         icon: Icon(icon, size: 20),
@@ -330,30 +480,36 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildLoadingState() {
+  Widget _buildLoadingState(bool isDark, Color primaryColor) {
     return Center(
       child: Column(
         children: [
           const SizedBox(height: 40),
-          const CircularProgressIndicator(color: Colors.teal),
+          CircularProgressIndicator(color: primaryColor),
           const SizedBox(height: 16),
-          Text(_getText('analyzing'), 
-            style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+          Text(
+            _getText('analyzing'),
+            style: TextStyle(
+              color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsCard() {
+  Widget _buildResultsCard(bool isDark, Color primaryColor) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -367,70 +523,99 @@ class _ReportScreenState extends State<ReportScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withValues(alpha: 0.1),
+                  color: primaryColor.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.analytics_outlined, color: Colors.teal, size: 20),
+                child: Icon(Icons.assignment_turned_in_outlined, color: primaryColor, size: 20),
               ),
               const SizedBox(width: 12),
-              Text(_getText('results'), 
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                _getText('results'),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
+
           MarkdownBody(
             data: summary!,
             styleSheet: MarkdownStyleSheet(
               p: TextStyle(
                 fontSize: 15,
                 height: 1.6,
-                color: Colors.grey.shade800,
+                color: isDark ? const Color(0xFFF8FAFC) : Colors.grey.shade800,
               ),
-              h3: const TextStyle(
+              h3: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.teal,
-                height: 2.0,
+                color: primaryColor,
+                height: 2.5,
               ),
-              listBullet: TextStyle(color: Colors.teal.shade700),
-              blockquote: TextStyle(color: Colors.orange.shade900),
+              listBullet: TextStyle(color: primaryColor),
+              blockquote: TextStyle(color: isDark ? const Color(0xFFFBBF24) : Colors.orange.shade900),
               blockquoteDecoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.05),
+                color: isDark ? const Color(0xFF451A03) : Colors.orange.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
                 border: const Border(
                   left: BorderSide(color: Colors.orange, width: 4),
                 ),
               ),
               blockquotePadding: const EdgeInsets.all(12),
+              horizontalRuleDecoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(width: 1.0, color: isDark ? const Color(0xFF334155) : Colors.grey.shade200),
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 25),
+          Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+          const SizedBox(height: 15),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              TextButton.icon(
-                onPressed: () => ExportService.shareText(
+              _buildResultAction(
+                icon: Icons.share_outlined,
+                label: _getText('share'),
+                onTap: () => ExportService.shareText(
                   summary!,
                   subject: _getText('title'),
                 ),
-                icon: const Icon(Icons.share_outlined, size: 18),
-                label: Text(_getText('share')),
-                style: TextButton.styleFrom(foregroundColor: Colors.teal),
+                primaryColor: primaryColor,
               ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                onPressed: () => ExportService.generateAndPrintPdf(
+              _buildResultAction(
+                icon: Icons.picture_as_pdf_outlined,
+                label: _getText('save_pdf'),
+                onTap: () => ExportService.generateAndPrintPdf(
                   title: _getText('title'),
                   content: summary!,
                 ),
-                icon: const Icon(Icons.download_outlined, size: 18),
-                label: Text(_getText('save_pdf')),
-                style: TextButton.styleFrom(foregroundColor: Colors.teal),
+                primaryColor: primaryColor,
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color primaryColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: primaryColor, size: 24),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.w500)),
         ],
       ),
     );

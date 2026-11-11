@@ -1,11 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import '../main.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/export_service.dart';
+import '../services/date_formatter.dart';
 
 class PrescriptionScreen extends StatefulWidget {
   static const String routeName = '/prescriptions';
@@ -28,6 +33,14 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
 
   final ImagePicker _picker = ImagePicker();
 
+  @override
+  void didUpdateWidget(covariant PrescriptionScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.language != widget.language) {
+      setState(() {});
+    }
+  }
+
   String _getText(String key) {
     final translations = {
       'en': {
@@ -49,14 +62,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'success': 'Reminders successfully scheduled!',
         'error_analyze': 'Error analyzing prescription',
         'error_db': 'Database Error',
-        'notif_morning_title': 'Morning Medication',
-        'notif_afternoon_title': 'Afternoon Medication',
-        'notif_night_title': 'Night Medication',
-        'notif_general_title': 'Medication Reminder',
-        'notif_morning_body': 'Time to take your morning medication.',
-        'notif_afternoon_body': 'Time to take your afternoon medication.',
-        'notif_night_body': 'Time to take your night medication.',
-        'notif_general_body': 'It is time to take your prescribed medication.',
       },
       'hi': {
         'title': 'नुस्खे',
@@ -77,14 +82,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'success': 'अनुस्मारक सफलतापूर्वक निर्धारित किए गए!',
         'error_analyze': 'नुस्खे के विश्लेषण में त्रुटि',
         'error_db': 'डेटाबेस त्रुटि',
-        'notif_morning_title': 'सुबह की दवा',
-        'notif_afternoon_title': 'दोपहर की दवा',
-        'notif_night_title': 'रात की दवा',
-        'notif_general_title': 'दवा अनुस्मारक',
-        'notif_morning_body': 'आपकी सुबह की दवा लेने का समय हो गया है।',
-        'notif_afternoon_body': 'आपकी दोपहर की दवा लेने का समय हो गया है।',
-        'notif_night_body': 'आपकी रात की दवा लेने का समय हो गया है।',
-        'notif_general_body': 'आपकी निर्धारित दवा लेने का समय आ गया है।',
       },
       'kn': {
         'title': 'ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್‌ಗಳು',
@@ -105,14 +102,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'success': 'ಜ್ಞಾಪನೆಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ನಿಗದಿಪಡಿಸಲಾಗಿದೆ!',
         'error_analyze': 'ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್ ವಿಶ್ಲೇಷಿಸುವಲ್ಲಿ ದೋಷ',
         'error_db': 'ಡೇಟಾಬೇಸ್ ದೋಷ',
-        'notif_morning_title': 'ಬೆಳಗಿನ ಔಷಧಿ',
-        'notif_afternoon_title': 'ಮಧ್ಯಾಹ್ನದ ಔಷಧಿ',
-        'notif_night_title': 'ರಾತ್ರಿಯ ಔಷಧಿ',
-        'notif_general_title': 'ಔಷಧಿ ಜ್ಞಾಪನೆ',
-        'notif_morning_body': 'ನಿಮ್ಮ ಬೆಳಗಿನ ಔಷಧಿ ತೆಗೆದುಕೊಳ್ಳುವ ಸಮಯವಾಗಿದೆ.',
-        'notif_afternoon_body': 'ನಿಮ್ಮ ಮಧ್ಯಾಹ್ನದ ಔಷಧಿ ತೆಗೆದುಕೊಳ್ಳುವ ಸಮಯವಾಗಿದೆ.',
-        'notif_night_body': 'ನಿಮ್ಮ ರಾತ್ರಿಯ ಔಷಧಿ ತೆಗೆದುಕೊಳ್ಳುವ ಸಮಯವಾಗಿದೆ.',
-        'notif_general_body': 'ನಿಮ್ಮ ಸೂಚಿಸಿದ ಔಷಧಿ ತೆಗೆದುಕೊಳ್ಳುವ ಸಮಯ ಸಂಭವಿಸಿದೆ.',
       },
       'ta': {
         'title': 'மருந்துச் சீட்டுகள்',
@@ -133,14 +122,6 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'success': 'நினைவூட்டல்கள் வெற்றிகரமாக திட்டமிடப்பட்டன!',
         'error_analyze': 'மருந்துச் சீட்டைப் பகுப்பாய்வு செய்வதில் பிழை',
         'error_db': 'தரவுத்தள பிழை',
-        'notif_morning_title': 'காலை மருந்து',
-        'notif_afternoon_title': 'மதிய மருந்து',
-        'notif_night_title': 'இரவு மருந்து',
-        'notif_general_title': 'மருந்து நினைவூட்டல்',
-        'notif_morning_body': 'உங்கள் காலை மருந்தை உட்கொள்ளும் நேரம் இது.',
-        'notif_afternoon_body': 'உங்கள் மதிய மருந்தை உட்கொள்ளும் நேரம் இது.',
-        'notif_night_body': 'உங்கள் இரவு மருந்தை உட்கொள்ளும் நேரம் இது.',
-        'notif_general_body': 'உங்கள் பரிந்துரைக்கப்பட்ட மருந்தை உட்கொள்ள வேண்டிய நேரம் வந்துவிட்டது.',
       },
       'ml': {
         'title': 'കുറിപ്പടികൾ',
@@ -154,21 +135,13 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'reminders': 'ഓർമ്മപ്പെടുത്തലുകൾ',
         'share': 'പങ്കിടുക',
         'save': 'സേവ് ചെയ്യുക',
-        'set_reminders': 'ഓർമ്മപ്പെടുത്തലുകൾ സജ്ಜമാക്കുക',
-        'reminder_query': 'ഈ കുറിപ്പടി അടിസ്ഥാനമാക്കി മരുന്ന് ഓർമ്മപ്പെടുത്തലുകൾ സജ്ಜമാക്കാൻ നിങ്ങൾ ആഗ്രഹിക്കുന്നുണ്ടോ?',
+        'set_reminders': 'ഓർമ്മപ്പെടുത്തലുകൾ സജ്ജമാക്കുക',
+        'reminder_query': 'ഈ കുറിപ്പടി അടിസ്ഥാനമാക്കി മരുന്ന് ഓർമ്മപ്പെടുത്തലുകൾ സജ്ജമാക്കാൻ നിങ്ങൾ ആഗ്രഹിക്കുന്നുണ്ടോ?',
         'yes': 'അതെ',
         'no': 'ഇല്ല',
         'success': 'ഓർമ്മപ്പെടുത്തലുകൾ വിജയകരമായി ഷെഡ്യൂൾ ചെയ്തു!',
         'error_analyze': 'കുറിപ്പടി വിശകലനം ചെയ്യുന്നതിൽ പിശക്',
         'error_db': 'ഡാറ്റാബേസ് പിശക്',
-        'notif_morning_title': 'രാവിലത്തെ മരുന്ന്',
-        'notif_afternoon_title': 'ഉച്ചയ്ക്കത്തെ മരുന്ന്',
-        'notif_night_title': 'രാത്രിയിലെ മരുന്ന്',
-        'notif_general_title': 'മരുന്ന് ഓർമ്മപ്പെടുത്തൽ',
-        'notif_morning_body': 'നിങ്ങളുടെ പ്രഭാത മരുന്ന് കഴിക്കാനുള്ള സമയമായി.',
-        'notif_afternoon_body': 'നിങ്ങളുടെ ഉച്ചഭക്ഷണ മരുന്ന് കഴിക്കാനുള്ള സമയമായി.',
-        'notif_night_body': 'നിങ്ങളുടെ രാത്രികാല മരുന്ന് കഴിക്കാനുള്ള സമയമായി.',
-        'notif_general_body': 'നിങ്ങൾ നിർദ്ദേശിച്ച മരുന്ന് കഴിക്കാനുള്ള സമയമായി.',
       },
       'te': {
         'title': 'ప్రిస్క్రిప్షన్లు',
@@ -189,40 +162,48 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         'success': 'రిమైండర్లు విజయవంతంగా షెడ్యూల్ చేయబడ్డాయి!',
         'error_analyze': 'ప్రిస్క్రిప్షన్ విశ్లేషించడంలో లోపం',
         'error_db': 'డేటాబేస్ లోపం',
-        'notif_morning_title': 'ఉదయం మందులు',
-        'notif_afternoon_title': 'మధ్యాహ్నం మందులు',
-        'notif_night_title': 'రాత్రి మందులు',
-        'notif_general_title': 'మందుల రిమైండర్',
-        'notif_morning_body': 'మీ ఉదయం మందులు తీసుకునే సమయం ఆసన్నమైంది.',
-        'notif_afternoon_body': 'మీ మధ్యాహ్నం మందులు తీసుకునే సమయం ఆసన్నమైంది.',
-        'notif_night_body': 'మీ రాత్రి మందులు తీసుకునే సమయం ఆసన్నమైంది.',
-        'notif_general_body': 'మీరు సూచించిన మందులు తీసుకునే సమయం జరిగింది.',
       },
     };
     return translations[widget.language]?[key] ?? translations['en']![key]!;
   }
 
-  DateTime getReminderTime(String time) {
+  DateTime parseReminderTime(String time) {
     final now = DateTime.now();
-    if (time == "morning") {
-      return DateTime(now.year, now.month, now.day, 8, 0);
+    try {
+      final parts = time.trim().split(":");
+      int hour = 8;
+      int minute = 0;
+      if (parts.isNotEmpty) {
+        hour = int.parse(RegExp(r'\d+').stringMatch(parts[0]) ?? '8');
+      }
+      if (parts.length > 1) {
+        minute = int.parse(RegExp(r'\d+').stringMatch(parts[1]) ?? '0');
+        if (time.toLowerCase().contains('pm') && hour < 12) hour += 12;
+        if (time.toLowerCase().contains('am') && hour == 12) hour = 0;
+      }
+      DateTime scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+      if (scheduled.isBefore(now)) {
+        scheduled = scheduled.add(const Duration(days: 1));
+      }
+      return scheduled;
+    } catch (_) {
+      return now.add(const Duration(hours: 1));
     }
-    if (time == "afternoon") {
-      return DateTime(now.year, now.month, now.day, 13, 0);
-    }
-    if (time == "night") {
-      return DateTime(now.year, now.month, now.day, 21, 0);
-    }
-    return now;
   }
 
   Future<void> _pickImage() async {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final localFile = await File(pickedFile.path).copy('${appDir.path}/${pickedFile.name}');
+
       setState(() {
-        selectedPrescription = File(pickedFile.path);
+        selectedPrescription = localFile;
         explanation = null;
+        extractedText = null;
+        detectedMedicines.clear();
+        schedule.clear();
       });
     }
   }
@@ -231,20 +212,39 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     final XFile? pickedFile =
         await _picker.pickImage(source: ImageSource.camera);
     if (pickedFile != null) {
+      final appDir = await getApplicationDocumentsDirectory();
+      final localFile = await File(pickedFile.path).copy('${appDir.path}/${pickedFile.name}');
+
       setState(() {
-        selectedPrescription = File(pickedFile.path);
+        selectedPrescription = localFile;
         explanation = null;
+        extractedText = null;
+        detectedMedicines.clear();
+        schedule.clear();
       });
     }
   }
 
+  int _loadingStep = 0;
+  final List<String> _progressSteps = [
+    "Uploading...",
+    "OCR Reading...",
+    "Medicine Detection...",
+    "AI Understanding...",
+    "Generating Schedule...",
+    "Completed."
+  ];
+
   Future<void> _analyzePrescription() async {
-    if (selectedPrescription == null) return;
+    if (selectedPrescription == null || isAnalyzing) return;
 
     setState(() {
       isAnalyzing = true;
       explanation = null;
+      _loadingStep = 0;
     });
+
+    _animateLoadingSteps();
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -255,12 +255,13 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
       );
 
       setState(() {
+        _loadingStep = 5;
         explanation = result["explanation"];
         extractedText = result["extracted_text"];
         detectedMedicines = result["detected_medicines"] ?? [];
         schedule = result["schedule"] ?? [];
       });
-      if (mounted) {
+      if (mounted && detectedMedicines.isNotEmpty && schedule.isNotEmpty) {
         _promptForReminders();
       }
     } catch (e) {
@@ -274,19 +275,46 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     }
   }
 
+  void _animateLoadingSteps() async {
+    for (int i = 1; i <= 4; i++) {
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (mounted && isAnalyzing) {
+        setState(() {
+          _loadingStep = i;
+        });
+      }
+    }
+  }
+
   void _promptForReminders() {
+    if (detectedMedicines.isEmpty || schedule.isEmpty) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(_getText('set_reminders')),
-          content: Text(_getText('reminder_query')),
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          title: Text(
+            _getText('set_reminders'),
+            style: TextStyle(color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A)),
+          ),
+          content: Text(
+            _getText('reminder_query'),
+            style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(_getText('no')),
+              child: Text(_getText('no'), style: TextStyle(color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+              ),
               onPressed: () {
                 Navigator.pop(context);
                 _scheduleReminders();
@@ -299,104 +327,156 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     );
   }
 
-  void _scheduleReminders() async {
-    final text = explanation?.toLowerCase() ?? '';
-    bool scheduled = false;
+  DateTime _parseScheduledTime(String timeStr) {
+    final now = DateTime.now();
+    String clean = timeStr.trim();
+    int hour = 8;
+    int minute = 0;
+
+    if (clean.toLowerCase().contains("am") || clean.toLowerCase().contains("pm")) {
+      try {
+        final dt = DateFormat('hh:mm a').parse(clean);
+        hour = dt.hour;
+        minute = dt.minute;
+      } catch (_) {}
+    } else {
+      try {
+        final parts = clean.split(":");
+        if (parts.length >= 2) {
+          hour = int.parse(parts[0]);
+          minute = int.parse(parts[1].split(" ")[0]);
+        }
+      } catch (_) {}
+    }
+
+    var scheduledTime = DateTime(now.year, now.month, now.day, hour, minute);
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime = scheduledTime.add(const Duration(days: 1));
+    }
+    return scheduledTime;
+  }
+
+  Future<void> _scheduleReminders() async {
     int idCounter = DateTime.now().millisecondsSinceEpoch % 100000;
     final user = Supabase.instance.client.auth.currentUser;
+    final prefs = await SharedPreferences.getInstance();
 
-    // Improved diagnostic: Find medicine names
-    List<String> medsToSave = [];
-    
-    // 1. Try to find headers starting with ### (which we just updated the backend to provide)
-    final RegExp nameRegex = RegExp(r'^###\s+(.*)$', multiLine: true);
-    final Iterable<RegExpMatch> matches = nameRegex.allMatches(explanation ?? '');
-    
-    if (matches.isNotEmpty) {
-      for (final match in matches) {
-        final name = match.group(1)?.trim();
-        if (name != null && name.isNotEmpty) medsToSave.add(name);
+    String mTime = prefs.getString('med_timing_morning') ?? '08:00 AM';
+    String aTime = prefs.getString('med_timing_afternoon') ?? '02:00 PM';
+    String dTime = prefs.getString('med_timing_dinner') ?? '08:00 PM';
+
+    if (user != null) {
+      final meta = user.userMetadata ?? {};
+      if (meta['med_timing_morning'] != null) mTime = meta['med_timing_morning'].toString();
+      if (meta['med_timing_afternoon'] != null) aTime = meta['med_timing_afternoon'].toString();
+      if (meta['med_timing_dinner'] != null) dTime = meta['med_timing_dinner'].toString();
+    }
+
+    mTime = DateFormatter.format12HourTime(mTime);
+    aTime = DateFormatter.format12HourTime(aTime);
+    dTime = DateFormatter.format12HourTime(dTime);
+
+    if (schedule.isEmpty) return;
+
+    final now = DateTime.now();
+    final todayDateStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final List<Map<String, dynamic>> recordsToUpsert = [];
+    final Set<String> seenKeys = {};
+
+    for (final med in schedule) {
+      final medicineName = med["medicine"] ?? "Medication";
+      final dosage = (med["dosage"] ?? "").toString().trim();
+      final timing = med["timing"] ?? "";
+
+      List<String> times = [];
+      if (med["reminder_times"] is List && (med["reminder_times"] as List).isNotEmpty) {
+        times = (med["reminder_times"] as List).map((t) => DateFormatter.format12HourTime(t.toString())).toList();
+      } else {
+        if (dosage == "1-0-0") {
+          times = [mTime];
+        } else if (dosage == "0-1-0") {
+          times = [aTime];
+        } else if (dosage == "0-0-1") {
+          times = [dTime];
+        } else if (dosage == "1-0-1") {
+          times = [mTime, dTime];
+        } else if (dosage == "1-1-0") {
+          times = [mTime, aTime];
+        } else if (dosage == "0-1-1") {
+          times = [aTime, dTime];
+        } else if (dosage == "1-1-1") {
+          times = [mTime, aTime, dTime];
+        } else {
+          times = [mTime];
+        }
       }
-    } 
-    
-    // 2. Fallback: If no ### found, try to find lines that look like titles 
-    // (Non-empty lines that don't contains 'Description:', 'Instructions:', etc.)
-    if (medsToSave.isEmpty) {
-      final lines = (explanation ?? '').split('\n');
-      for (var line in lines) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty && 
-            !trimmed.startsWith('Description:') && 
-            !trimmed.startsWith('Reason:') && 
-            !trimmed.startsWith('Instructions:') &&
-            !trimmed.startsWith('---') &&
-            trimmed.length < 40) {
-          medsToSave.add(trimmed);
+
+      for (final time in times) {
+        final formattedTimeStr = DateFormatter.format12HourTime(time);
+        final scheduledTime = _parseScheduledTime(formattedTimeStr);
+
+        NotificationService()
+            .scheduleMedicationReminder(
+              id: idCounter++,
+              title: medicineName,
+              body: "Time to take $medicineName ($dosage • $timing)",
+              scheduledTime: scheduledTime,
+            )
+            .catchError((e) => debugPrint("Notification schedule warning: $e"));
+
+        final dedupKey = "${medicineName.toLowerCase()}|$formattedTimeStr|$todayDateStr";
+        if (seenKeys.add(dedupKey)) {
+          recordsToUpsert.add({
+            'user_id': user?.id ?? '',
+            'medicine_name': medicineName,
+            'dosage': dosage,
+            'timing': timing,
+            'reminder_time': formattedTimeStr,
+            'reminder_date': todayDateStr,
+            'status': 'pending',
+          });
         }
       }
     }
 
-    if (text.contains('morning')) {
-      await NotificationService().scheduleMedicationReminder(
-        id: idCounter++,
-        title: _getText('notif_morning_title'),
-        body: _getText('notif_morning_body'),
-        scheduledTime: getReminderTime("morning"),
-      );
-      scheduled = true;
-    }
-    if (text.contains('afternoon')) {
-      await NotificationService().scheduleMedicationReminder(
-        id: idCounter++,
-        title: _getText('notif_afternoon_title'),
-        body: _getText('notif_afternoon_body'),
-        scheduledTime: getReminderTime("afternoon"),
-      );
-      scheduled = true;
-    }
-    if (text.contains('night') || text.contains('evening')) {
-      await NotificationService().scheduleMedicationReminder(
-        id: idCounter++,
-        title: _getText('notif_night_title'),
-        body: _getText('notif_night_body'),
-        scheduledTime: getReminderTime("night"),
-      );
-      scheduled = true;
-    }
+    if (recordsToUpsert.isNotEmpty) {
+      // Immediately surface reminders on the dashboard before DB round-trip finishes
+      pendingRemindersNotifier.value = List<Map<String, dynamic>>.from(recordsToUpsert);
 
-    if (!scheduled && medsToSave.isEmpty) {
-      await NotificationService().scheduleMedicationReminder(
-        id: idCounter++,
-        title: _getText('notif_general_title'),
-        body: _getText('notif_general_body'),
-        scheduledTime: DateTime.now().add(const Duration(hours: 1)),
-      );
-      medsToSave.add("New Medication");
-    }
-
-    // Save to Supabase so it shows up in the Dashboard
-    if (user != null && medsToSave.isNotEmpty) {
-      try {
-        for (var medName in medsToSave) {
-          await Supabase.instance.client.from('user_medications').upsert({
-            'user_id': user.id,
-            'name': medName,
-            'last_updated': DateTime.now().toIso8601String(),
-          }, onConflict: 'user_id, name');
-        }
-      } catch (e) {
-        debugPrint("Error saving meds to DB: $e");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${_getText('error_db')}: $e'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
+      if (user != null) {
+        try {
+          await Supabase.instance.client.from('medication_reminders').upsert(
+            recordsToUpsert,
+            onConflict: 'user_id,medicine_name,reminder_time,reminder_date',
           );
+        } catch (upsertErr) {
+          debugPrint("Upsert failed, falling back to safe insert: $upsertErr");
+          try {
+            final existing = await Supabase.instance.client
+                .from('medication_reminders')
+                .select('medicine_name, reminder_time')
+                .eq('user_id', user.id)
+                .eq('reminder_date', todayDateStr);
+            final existingSet = <String>{};
+            for (final row in (existing as List<dynamic>)) {
+              existingSet.add("${(row['medicine_name'] ?? '').toString().toLowerCase()}|${row['reminder_time'] ?? ''}");
+            }
+            final toInsert = recordsToUpsert.where((r) {
+              final k = "${(r['medicine_name'] ?? '').toString().toLowerCase()}|${r['reminder_time'] ?? ''}";
+              return !existingSet.contains(k);
+            }).toList();
+            if (toInsert.isNotEmpty) {
+              await Supabase.instance.client.from('medication_reminders').insert(toInsert);
+            }
+          } catch (insertErr) {
+            debugPrint("Error inserting reminders to Supabase: $insertErr");
+          }
         }
       }
     }
+
+    // Notify DashboardScreen to refresh with persisted DB records
+    dashboardRefreshNotifier.value++;
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -407,15 +487,26 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = isDark ? const Color(0xFF1CC8B5) : const Color(0xFF0F9D8A);
+
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF7FAFC),
       appBar: AppBar(
-        title: Text(_getText('title'), 
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(
+          _getText('title'),
+          style: TextStyle(
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -424,10 +515,10 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildUploadCard(),
+            _buildUploadCard(isDark, primaryColor),
             const SizedBox(height: 25),
-            if (isAnalyzing) _buildLoadingState(),
-            if (explanation != null && !isAnalyzing) _buildResultsCard(),
+            if (isAnalyzing) _buildLoadingState(isDark, primaryColor),
+            if (explanation != null && !isAnalyzing) _buildResultsCard(isDark, primaryColor),
             const SizedBox(height: 30),
           ],
         ),
@@ -435,16 +526,17 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     );
   }
 
-  Widget _buildUploadCard() {
+  Widget _buildUploadCard(bool isDark, Color primaryColor) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -457,7 +549,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
               borderRadius: BorderRadius.circular(16),
               child: Stack(
                 children: [
-                   Image.file(
+                  Image.file(
                     selectedPrescription!,
                     height: 250,
                     width: double.infinity,
@@ -489,20 +581,34 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
               height: 200,
               width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.teal.withValues(alpha: 0.03),
+                color: primaryColor.withValues(alpha: isDark ? 0.1 : 0.04),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.teal.withValues(alpha: 0.1), width: 2),
+                border: Border.all(
+                  color: primaryColor.withValues(alpha: isDark ? 0.3 : 0.15),
+                  width: 2,
+                ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.description_outlined, size: 50, color: Colors.teal.shade300),
+                  Icon(Icons.description_outlined, size: 50, color: primaryColor),
                   const SizedBox(height: 12),
-                  Text(_getText('upload'), 
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal.shade700)),
+                  Text(
+                    _getText('upload'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(_getText('upload_sub'), 
-                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  Text(
+                    _getText('upload_sub'),
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -515,6 +621,8 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                   icon: Icons.photo_library_outlined,
                   label: _getText('gallery'),
                   isPrimary: false,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
                 ),
               ),
               const SizedBox(width: 12),
@@ -524,6 +632,8 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                   icon: Icons.camera_alt_outlined,
                   label: _getText('camera'),
                   isPrimary: false,
+                  isDark: isDark,
+                  primaryColor: primaryColor,
                 ),
               ),
             ],
@@ -535,6 +645,8 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
             label: _getText('analyze'),
             isPrimary: true,
             fullWidth: true,
+            isDark: isDark,
+            primaryColor: primaryColor,
           ),
         ],
       ),
@@ -546,20 +658,31 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     required IconData icon,
     required String label,
     required bool isPrimary,
+    required bool isDark,
+    required Color primaryColor,
     bool fullWidth = false,
   }) {
+    final bgColor = isPrimary
+        ? primaryColor
+        : (isDark ? const Color(0xFF0F172A) : Colors.white);
+    final fgColor = isPrimary
+        ? (isDark ? const Color(0xFF0F172A) : Colors.white)
+        : primaryColor;
+
     return SizedBox(
       width: fullWidth ? double.infinity : null,
       height: 52,
       child: ElevatedButton.icon(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isPrimary ? Colors.teal : Colors.white,
-          foregroundColor: isPrimary ? Colors.white : Colors.teal,
+          backgroundColor: bgColor,
+          foregroundColor: fgColor,
           elevation: isPrimary ? 2 : 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: isPrimary ? BorderSide.none : BorderSide(color: Colors.teal.shade100),
+            side: isPrimary
+                ? BorderSide.none
+                : BorderSide(color: isDark ? const Color(0xFF334155) : primaryColor.withValues(alpha: 0.3)),
           ),
         ),
         icon: Icon(icon, size: 20),
@@ -568,30 +691,48 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     );
   }
 
-  Widget _buildLoadingState() {
-    return Center(
+  Widget _buildLoadingState(bool isDark, Color primaryColor) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+      ),
       child: Column(
         children: [
-          const SizedBox(height: 40),
-          const CircularProgressIndicator(color: Colors.teal),
-          const SizedBox(height: 16),
-          Text(_getText('analyzing'), 
-            style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+          CircularProgressIndicator(color: primaryColor),
+          const SizedBox(height: 20),
+          Text(
+            _progressSteps[_loadingStep.clamp(0, 5)],
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: primaryColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: (_loadingStep + 1) / 6.0,
+            backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            color: primaryColor,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsCard() {
+  Widget _buildResultsCard(bool isDark, Color primaryColor) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -605,35 +746,42 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withValues(alpha: 0.1),
+                  color: primaryColor.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.medication_outlined, color: Colors.teal, size: 20),
+                child: Icon(Icons.medication_outlined, color: primaryColor, size: 20),
               ),
               const SizedBox(width: 12),
-              Text(_getText('results'), 
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                _getText('results'),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
+
           MarkdownBody(
             data: explanation!,
             styleSheet: MarkdownStyleSheet(
               p: TextStyle(
                 fontSize: 15,
                 height: 1.6,
-                color: Colors.grey.shade800,
+                color: isDark ? const Color(0xFFF8FAFC) : Colors.grey.shade800,
               ),
-              h3: const TextStyle(
+              h3: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.teal,
+                color: primaryColor,
                 height: 2.5,
               ),
-              listBullet: TextStyle(color: Colors.teal.shade700),
-              blockquote: TextStyle(color: Colors.orange.shade900),
+              listBullet: TextStyle(color: primaryColor),
+              blockquote: TextStyle(color: isDark ? const Color(0xFFFBBF24) : Colors.orange.shade900),
               blockquoteDecoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.05),
+                color: isDark ? const Color(0xFF451A03) : Colors.orange.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(12),
                 border: const Border(
                   left: BorderSide(color: Colors.orange, width: 4),
@@ -642,54 +790,69 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
               blockquotePadding: const EdgeInsets.all(12),
               horizontalRuleDecoration: BoxDecoration(
                 border: Border(
-                  top: BorderSide(width: 1.0, color: Colors.grey.shade200),
+                  top: BorderSide(width: 1.0, color: isDark ? const Color(0xFF334155) : Colors.grey.shade200),
                 ),
               ),
             ),
           ),
           if (schedule.isNotEmpty)
             Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 const SizedBox(height: 20),
-
-                const Text(
+                Text(
                   "Medication Schedule",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-              ...schedule.map((med) {
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(
-                      Icons.medication,
-                      color: Colors.teal,
+                ...schedule.map((med) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     ),
-                    title: Text(med["medicine"] ?? ""),
-                    subtitle: Text("${med["dosage"]} • ${med["duration"]}\n${med["timing"]}"),
-                  ),
-                );
-              }),
-            ],
-          ),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.medication,
+                        color: primaryColor,
+                      ),
+                      title: Text(
+                        med["medicine"] ?? "",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        ),
+                      ),
+                      subtitle: Text(
+                        "${med["dosage"] ?? ""} • ${med["duration"] ?? ""}\n${med["timing"] ?? ""}",
+                        style: TextStyle(
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
           const SizedBox(height: 25),
-          const Divider(),
+          Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
           const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildResultAction(
-                icon: Icons.alarm_add_outlined,
-                label: _getText('reminders'),
-                onTap: _promptForReminders,
-              ),
+              if (schedule.isNotEmpty)
+                _buildResultAction(
+                  icon: Icons.alarm_add_outlined,
+                  label: _getText('reminders'),
+                  onTap: _promptForReminders,
+                  primaryColor: primaryColor,
+                ),
               _buildResultAction(
                 icon: Icons.share_outlined,
                 label: _getText('share'),
@@ -697,6 +860,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                   explanation!,
                   subject: _getText('title'),
                 ),
+                primaryColor: primaryColor,
               ),
               _buildResultAction(
                 icon: Icons.bookmark_border_outlined,
@@ -705,6 +869,7 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
                   title: _getText('title'),
                   content: explanation!,
                 ),
+                primaryColor: primaryColor,
               ),
             ],
           ),
@@ -717,14 +882,15 @@ class _PrescriptionScreenState extends State<PrescriptionScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    required Color primaryColor,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          Icon(icon, color: Colors.teal, size: 24),
+          Icon(icon, color: primaryColor, size: 24),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.teal, fontSize: 12, fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(color: primaryColor, fontSize: 12, fontWeight: FontWeight.w500)),
         ],
       ),
     );
